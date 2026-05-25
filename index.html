@@ -3,12 +3,28 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Cruz Paguirigan</title>
+<title>Cruz Paguirigan — #21, Attacking Mid</title>
+<meta name="description" content="Cruz Paguirigan — #21, attacking midfielder and captain for LA Breakers FC (2012 ECNL). Tough. Smart. Relentless. Watch the highlights." />
+<meta name="theme-color" content="#f3f1ec" />
+<link rel="canonical" href="https://josephpaguirigandesign.github.io/Cruz/" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<!-- Open Graph / social share -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Cruz Paguirigan — #21, Attacking Mid" />
+<meta property="og:description" content="Attacking midfielder and captain for LA Breakers FC (2012 ECNL). Tough. Smart. Relentless." />
+<meta property="og:url" content="https://josephpaguirigandesign.github.io/Cruz/" />
+<meta property="og:image" content="https://josephpaguirigandesign.github.io/Cruz/og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Cruz Paguirigan — #21, Attacking Mid" />
+<meta name="twitter:description" content="Attacking midfielder and captain for LA Breakers FC (2012 ECNL). Tough. Smart. Relentless." />
+<meta name="twitter:image" content="https://josephpaguirigandesign.github.io/Cruz/og.jpg" />
 <style>
   :root{
     --bg:#f3f1ec;
     --ink:#111111;
-    --ink-dim:#6b6b66;
+    --ink-dim:#5b5b56;
     --line:#111111;
     --line-soft:rgba(17,17,17,0.16);
     --accent:#e2341d;
@@ -40,20 +56,6 @@
   }
   .label.dim{color:var(--ink-dim);font-weight:500}
   .accent{color:var(--accent)}
-
-  /* ---------- NAV ---------- */
-  header.nav{
-    position:fixed;top:0;left:0;right:0;z-index:100;
-    background:var(--bg);
-    border-bottom:1px solid var(--line);
-  }
-  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:58px}
-  .brand{font-size:14px;font-weight:700;letter-spacing:0.02em}
-  .brand .dot{color:var(--accent)}
-  nav.links{display:flex;gap:32px}
-  nav.links a{font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink);position:relative}
-  nav.links a::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .25s}
-  nav.links a:hover::after{transform:scaleX(1)}
 
   /* ---------- HERO ---------- */
   .hero{position:relative;overflow:hidden;container-type:inline-size;padding-top:clamp(48px,9vw,128px);padding-bottom:clamp(40px,7vw,96px);border-bottom:1px solid var(--line)}
@@ -106,11 +108,12 @@
     opacity:.97;
     filter:saturate(.98) contrast(1.02) drop-shadow(0 16px 26px rgba(17,17,17,0.13));
   }
+  /* mobile: anchor from the top so his head is always in frame (hero is too short to bottom-anchor) */
   @media(max-width:900px){
-    .hero-photo{height:clamp(240px,40vh,400px);opacity:.85}
+    .hero-photo{height:clamp(320px,58vw,500px);opacity:.85;top:40px;bottom:auto}
   }
   @media(max-width:560px){
-    .hero-photo{height:34vh;opacity:.6}
+    .hero-photo{height:66vw;opacity:.6;top:32px;bottom:auto}
   }
 
   /* ---------- SECTION HEAD ---------- */
@@ -279,12 +282,12 @@
         <span class="label dim">6 Clips</span>
       </div>
       <div class="gal-grid">
-        <div class="gal-item"><video src="highlight-1a.mp4" poster="poster-1a.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 01</span><span class="tags">Soccer</span></div></div>
-        <div class="gal-item"><video src="highlight-1b.mp4" poster="poster-1b.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 02</span><span class="tags">Soccer</span></div></div>
-        <div class="gal-item"><video src="highlight-2.mp4" poster="poster-2.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 03</span><span class="tags">Soccer</span></div></div>
-        <div class="gal-item"><video src="highlight-3.mp4" poster="poster-3.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 04</span><span class="tags">Soccer</span></div></div>
-        <div class="gal-item"><video src="highlight-4.mp4" poster="poster-4.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 05</span><span class="tags">Soccer</span></div></div>
-        <div class="gal-item"><video src="highlight-5.mp4" poster="poster-5.jpg" autoplay muted loop playsinline preload="auto"></video><div class="gal-cap"><span class="name">Highlight 06</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-1a.mp4" poster="poster-1a.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 01</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-1b.mp4" poster="poster-1b.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 02</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-2.mp4" poster="poster-2.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 03</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-3.mp4" poster="poster-3.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 04</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-4.mp4" poster="poster-4.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 05</span><span class="tags">Soccer</span></div></div>
+        <div class="gal-item"><video src="highlight-5.mp4" poster="poster-5.jpg" muted loop playsinline preload="metadata"></video><div class="gal-cap"><span class="name">Highlight 06</span><span class="tags">Soccer</span></div></div>
       </div>
     </div>
   </div>
@@ -442,22 +445,40 @@
   setTimeout(fire, 400);
 })();
 
-/* click to pause / resume each highlight */
+/* highlights: autoplay only while in view (saves bandwidth), click to pause/resume */
 (function(){
-  var vids = document.querySelectorAll('.gal-item video');
-  Array.prototype.forEach.call(vids, function(v){
+  var vids = Array.prototype.slice.call(document.querySelectorAll('.gal-item video'));
+  if(!vids.length) return;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function play(v){ var p = v.play(); if (p && p.catch) p.catch(function(){}); }
+  vids.forEach(function(v){
     var item = v.parentNode;
+    v.userPaused = false;
     var t = document.createElement('div');
     t.className = 'vid-toggle';
     t.innerHTML = '<span class="ico"></span>';
     item.appendChild(t);
+    if (reduce){ v.userPaused = true; item.classList.add('is-paused'); } // don't auto-motion; let user tap
     item.addEventListener('click', function(){
-      if (v.paused){ var p = v.play(); if (p && p.catch) p.catch(function(){}); }
-      else { v.pause(); }
+      if (v.userPaused || v.paused){
+        v.userPaused = false; item.classList.remove('is-paused'); play(v);
+      } else {
+        v.userPaused = true; item.classList.add('is-paused'); v.pause();
+      }
     });
-    v.addEventListener('pause', function(){ item.classList.add('is-paused'); });
-    v.addEventListener('play',  function(){ item.classList.remove('is-paused'); });
   });
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        var v = e.target;
+        if (e.isIntersecting){ if (!v.userPaused && !reduce) play(v); }
+        else if (!v.paused){ v.pause(); }
+      });
+    }, { threshold: 0.25 });
+    vids.forEach(function(v){ io.observe(v); });
+  } else if (!reduce){
+    vids.forEach(play);
+  }
 })();
 </script>
 
