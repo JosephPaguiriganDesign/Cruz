@@ -88,6 +88,7 @@
     font-weight:700;letter-spacing:-0.03em;line-height:0.86;
     font-size:clamp(58px,15vw,210px);
     text-transform:uppercase;
+    text-shadow:none;
   }
   .hero h1 .stop{color:var(--accent)}
   .hero-lead{grid-column:7 / 12;margin-top:clamp(28px,4vw,48px);font-size:clamp(17px,1.6vw,22px);line-height:1.4;font-weight:500;max-width:30ch}
@@ -96,6 +97,20 @@
     .hero h1{grid-column:1/-1}
     .hero-lead{grid-column:1/-1}
     .hero-tag{grid-column:1/-1;margin-top:24px}
+  }
+
+  /* hero photo — right side, above the ghost 21, behind the name */
+  .hero-photo{
+    position:absolute;z-index:2;left:60%;transform:translateX(calc(-50% + 160px));bottom:-44px;
+    height:clamp(360px,62vh,640px);width:auto;pointer-events:none;
+    opacity:.97;
+    filter:saturate(.98) contrast(1.02) drop-shadow(0 16px 26px rgba(17,17,17,0.13));
+  }
+  @media(max-width:900px){
+    .hero-photo{height:clamp(300px,50vh,500px);opacity:.85}
+  }
+  @media(max-width:560px){
+    .hero-photo{height:42vh;opacity:.6}
   }
 
   /* ---------- SECTION HEAD ---------- */
@@ -121,6 +136,40 @@
     .stat{min-height:0;border-right:none;border-bottom:1px solid var(--line-soft);padding:22px 0;gap:8px}
     .stat:last-child{border-bottom:none}
   }
+
+  /* ---------- ABOUT BG (soccer motif, parallax) ---------- */
+  #about{position:relative;overflow:hidden}
+  #about .sec{position:relative;z-index:3}
+  .about-bg{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+  .about-bg .p-layer{position:absolute;inset:0;will-change:transform}
+  .about-bg svg{position:absolute;display:block;will-change:transform}
+  /* pitch (far plane) */
+  .about-field{right:-8%;top:50%;width:clamp(440px,62vw,900px);color:var(--ink);opacity:.06;filter:blur(1px);animation:fieldSway 28s ease-in-out infinite}
+  .about-field .pitch *{fill:none;stroke:currentColor;stroke-width:1.2;vector-effect:non-scaling-stroke}
+  .about-field .pitch circle{transform-box:fill-box;transform-origin:center;animation:pitchPulse 9s ease-in-out infinite}
+  .about-field .spot{fill:currentColor;stroke:none}
+  /* ball base */
+  .about-ball{color:var(--ink)}
+  .about-ball .spin{transform-origin:60px 60px}
+  .about-ball .rim{fill:none;stroke:currentColor;stroke-width:1.6}
+  .about-ball line{stroke:currentColor;stroke-width:1.4}
+  .about-ball .pent-e polygon{fill:currentColor;stroke:none}
+  .about-ball .pent-c{fill:var(--accent);stroke:none}
+  /* single ball — anchored at section center, fully driven by JS (randomized shots) */
+  .about-ball.shot{left:50%;top:50%;width:clamp(120px,15vw,210px);opacity:0;transform:translate(-50%,-50%) scale(.3);will-change:transform,opacity}
+  /* accent geometry for depth */
+  .about-sq{right:29%;bottom:20%;width:clamp(14px,1.8vw,26px);aspect-ratio:1;background:var(--accent);opacity:.16;animation:sqPulse 6.5s ease-in-out infinite}
+  .about-ring{left:-7%;bottom:-32%;width:clamp(200px,30vw,420px);aspect-ratio:1;border:1px solid rgba(226,52,29,0.12);border-radius:50%;animation:spin 95s linear infinite}
+  @keyframes sqPulse{0%,100%{opacity:.09;transform:rotate(0) scale(1)}50%{opacity:.22;transform:rotate(45deg) scale(1.14)}}
+  @keyframes fieldSway{
+    0%{transform:translateY(-50%) translate(0,0) scale(1) rotate(0)}
+    25%{transform:translateY(-50%) translate(-1.1%,-0.9%) scale(1.02) rotate(-.45deg)}
+    50%{transform:translateY(-50%) translate(0.9%,1.1%) scale(1.038) rotate(.55deg)}
+    75%{transform:translateY(-50%) translate(-0.5%,0.5%) scale(1.016) rotate(-.25deg)}
+    100%{transform:translateY(-50%) translate(0,0) scale(1) rotate(0)}
+  }
+  @keyframes pitchPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.07);opacity:.65}}
+  @media(prefers-reduced-motion:reduce){.about-ball,.about-ball .spin,.about-field,.about-field .pitch circle,.about-sq,.about-ring{animation:none}}
 
   /* ---------- GALLERY ---------- */
   .gal-intro{grid-column:1/-1;margin-top:clamp(32px,4vw,52px);display:flex;justify-content:space-between;border-top:1px solid var(--line-soft);padding-top:12px}
@@ -163,6 +212,7 @@
     <div class="hero-square" data-scroll="0.14"></div>
     <div class="hero-vert" data-scroll="-0.08"># 21 · 2026</div>
   </div>
+  <img class="hero-photo" src="cruzhero.png" alt="Cruz Paguirigan running" data-scroll="-0.05" />
   <div class="grid">
     <h1>Cruz<br>Paguirigan<span class="stop">.</span></h1>
   </div>
@@ -170,6 +220,38 @@
 
 <!-- ABOUT -->
 <section id="about">
+  <div class="about-bg" aria-hidden="true">
+    <!-- deep accent ring -->
+    <div class="p-layer" data-depth="6" data-scroll="0.4"><span class="about-ring"></span></div>
+    <!-- pitch (far) -->
+    <div class="p-layer" data-depth="10" data-scroll="0.6">
+      <svg class="about-field" viewBox="0 0 300 188">
+        <g class="pitch">
+          <rect x="6" y="6" width="288" height="176"/>
+          <line x1="150" y1="6" x2="150" y2="182"/>
+          <circle cx="150" cy="94" r="26"/>
+          <rect x="6" y="44" width="52" height="100"/>
+          <rect x="6" y="74" width="22" height="40"/>
+          <rect x="242" y="44" width="52" height="100"/>
+          <rect x="272" y="74" width="22" height="40"/>
+        </g>
+        <circle class="spot" cx="150" cy="94" r="2"/>
+        <circle class="spot" cx="42" cy="94" r="1.6"/>
+        <circle class="spot" cx="258" cy="94" r="1.6"/>
+      </svg>
+    </div>
+    <!-- accent square -->
+    <div class="p-layer" data-depth="50" data-scroll="1.7"><span class="about-sq"></span></div>
+    <!-- single ball — fired one at a time, randomized by JS -->
+    <div class="p-layer" data-depth="34" data-scroll="1.2">
+      <svg class="about-ball shot" id="shotBall" viewBox="0 0 120 120"><g class="spin">
+        <circle class="rim" cx="60" cy="60" r="50"/>
+        <polygon class="pent-c" points="60,42 77.12,54.44 70.58,74.56 49.42,74.56 42.88,54.44"/>
+        <g class="spokes"><line x1="60" y1="42" x2="60" y2="10"/><line x1="77.12" y1="54.44" x2="107.55" y2="44.55"/><line x1="70.58" y1="74.56" x2="89.39" y2="100.45"/><line x1="49.42" y1="74.56" x2="30.61" y2="100.45"/><line x1="42.88" y1="54.44" x2="12.45" y2="44.55"/></g>
+        <g class="pent-e"><polygon points="60,9 66.66,13.84 64.11,21.66 55.89,21.66 53.34,13.84"/><polygon points="108.5,44.24 105.96,52.07 97.73,52.07 95.19,44.24 101.85,39.4"/><polygon points="89.98,101.26 81.75,101.26 79.21,93.43 85.86,88.6 92.52,93.43"/><polygon points="30.02,101.26 27.48,93.43 34.14,88.6 40.79,93.43 38.25,101.26"/><polygon points="11.5,44.24 18.15,39.4 24.81,44.24 22.27,52.07 14.04,52.07"/></g>
+      </g></svg>
+    </div>
+  </div>
   <div class="sec wrap">
     <div class="grid">
       <span class="sec-num">01 — About</span>
@@ -238,7 +320,8 @@
     }
     for (var j=0;j<extras.length;j++){
       var f = parseFloat(extras[j].getAttribute('data-scroll')) || 0;
-      extras[j].style.transform = 'translateY(' + (sCur*f) + 'px)';
+      var px = extras[j].classList.contains('hero-photo') ? '-50%' : '0';
+      extras[j].style.transform = 'translate(' + px + ',' + (sCur*f) + 'px)';
     }
     if (Math.abs(tx-cx) > 0.0005 || Math.abs(ty-cy) > 0.0005 || Math.abs(sTarget-sCur) > 0.4){
       raf = requestAnimationFrame(loop);
@@ -254,6 +337,110 @@
   hero.addEventListener('pointerleave', function(){ tx = 0; ty = 0; kick(); });
   window.addEventListener('scroll', function(){ sTarget = window.scrollY || window.pageYOffset || 0; kick(); }, { passive:true });
   kick();
+})();
+
+/* parallax + depth for the About soccer motif (mouse + scroll) */
+(function(){
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var root = document.getElementById('about');
+  if(!root) return;
+  var layers = Array.prototype.slice.call(root.querySelectorAll('.p-layer'));
+  if(!layers.length) return;
+  var tx=0, ty=0, cx=0, cy=0, prog=0, cprog=0, raf=null;
+  function readScroll(){
+    var r = root.getBoundingClientRect();
+    var vh = window.innerHeight || 1;
+    prog = ((vh/2) - (r.top + r.height/2)) / vh;   // -~1 (below) .. +~1 (above)
+  }
+  function loop(){
+    cx += (tx - cx) * 0.07;
+    cy += (ty - cy) * 0.07;
+    cprog += (prog - cprog) * 0.1;
+    for (var i=0;i<layers.length;i++){
+      var L = layers[i];
+      var d = parseFloat(L.getAttribute('data-depth')) || 0;
+      var s = parseFloat(L.getAttribute('data-scroll')) || 0;
+      var mx = cx * d, my = cy * d;
+      var sy = cprog * 78 * s;
+      L.style.transform = 'translate3d(' + mx.toFixed(2) + 'px,' + (my+sy).toFixed(2) + 'px,0)';
+    }
+    if (Math.abs(tx-cx)>0.0004 || Math.abs(ty-cy)>0.0004 || Math.abs(prog-cprog)>0.0008){
+      raf = requestAnimationFrame(loop);
+    } else { raf = null; }
+  }
+  function kick(){ if(!raf) raf = requestAnimationFrame(loop); }
+  root.addEventListener('pointermove', function(e){
+    var r = root.getBoundingClientRect();
+    tx = ((e.clientX - r.left) / r.width) - 0.5;
+    ty = ((e.clientY - r.top) / r.height) - 0.5;
+    kick();
+  });
+  root.addEventListener('pointerleave', function(){ tx = 0; ty = 0; kick(); });
+  window.addEventListener('scroll', function(){ readScroll(); kick(); }, { passive:true });
+  window.addEventListener('resize', function(){ readScroll(); kick(); });
+  readScroll(); kick();
+})();
+
+/* randomized single soccer-ball shots — one at a time, random direction/speed/size/spin */
+(function(){
+  var ball = document.getElementById('shotBall');
+  if(!ball) return;
+  var spin = ball.querySelector('.spin');
+  var pentC = ball.querySelector('.pent-c');
+  var stage = ball.closest('.about-bg') || document.getElementById('about');
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    ball.style.opacity = '0.12';
+    ball.style.transform = 'translate(-50%,-50%) scale(1)';
+    return;
+  }
+  function rnd(a,b){ return a + Math.random()*(b-a); }
+  function chance(p){ return Math.random() < p; }
+  var eases = ['cubic-bezier(.45,.05,.55,.95)','cubic-bezier(.2,.7,.25,1)','cubic-bezier(.5,0,.5,1)','cubic-bezier(.34,.02,.2,1)','linear'];
+  function base(x,y,s){
+    return 'translate(-50%,-50%) translate('+x.toFixed(1)+'px,'+y.toFixed(1)+'px) scale('+s.toFixed(3)+')';
+  }
+  function fire(){
+    var r = stage.getBoundingClientRect();
+    var W = r.width || window.innerWidth, H = r.height || 380;
+    var R = Math.sqrt(W*W + H*H)/2 + 170;        // off-screen launch radius
+    var a0 = rnd(0, Math.PI*2);                    // random entry direction (any edge)
+    var a1 = a0 + Math.PI + rnd(-0.7, 0.7);        // exit roughly opposite, with jitter
+    var p0x = Math.cos(a0)*R, p0y = Math.sin(a0)*R;
+    var p1x = Math.cos(a1)*R, p1y = Math.sin(a1)*R;
+    var dx = p1x-p0x, dy = p1y-p0y, len = Math.hypot(dx,dy)||1;  // perpendicular for banana curve
+    var nx = -dy/len, ny = dx/len;
+    var arc = rnd(-0.5, 0.5) * Math.min(W, H);
+    var mx = (p0x+p1x)/2 + nx*arc, my = (p0y+p1y)/2 + ny*arc;
+
+    var sStart = rnd(.22,.5);
+    var sPeak  = chance(.2) ? rnd(.4,.7) : rnd(.8,1.95);  // usually grows big, sometimes stays small
+    var sEnd   = rnd(.2,.5);
+    var pk     = rnd(.16,.30);
+    var dur    = rnd(1700,4600);                          // varied speed
+    var ease   = eases[(Math.random()*eases.length)|0];
+
+    ball.style.filter = 'blur(' + Math.max(0,(1.05 - sPeak)*2.4).toFixed(2) + 'px)';  // depth-of-field
+    pentC.style.fill = chance(.3) ? 'currentColor' : 'var(--accent)';                 // surprise: ink vs red
+
+    var fly = ball.animate([
+      { offset:0,    opacity:0,  transform: base(p0x,p0y,sStart) },
+      { offset:0.12, opacity:pk },
+      { offset:0.5,  opacity:pk, transform: base(mx,my,sPeak) },
+      { offset:0.88, opacity:pk*0.5 },
+      { offset:1,    opacity:0,  transform: base(p1x,p1y,sEnd) }
+    ], { duration:dur, easing:ease, fill:'forwards' });
+
+    var turns = rnd(1.3,4) * (chance(.5)?-1:1);
+    spin.animate(
+      [{transform:'rotate(0deg)'},{transform:'rotate('+(360*turns).toFixed(0)+'deg)'}],
+      { duration:dur, easing:'linear', fill:'forwards' }
+    );
+
+    fly.onfinish = function(){
+      setTimeout(fire, chance(.25) ? rnd(900,1700) : rnd(120,700));  // one at a time; mostly snappy
+    };
+  }
+  setTimeout(fire, 400);
 })();
 
 /* click to pause / resume each highlight */
