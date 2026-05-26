@@ -72,6 +72,7 @@
   .ghost-num .g3{color:rgba(17,17,17,0.055);filter:blur(3px);animation:floatC 26s ease-in-out infinite}
   .ghost-num .g4{color:rgba(226,52,29,0.05);filter:blur(6px);animation:floatD 31s ease-in-out infinite}
   .ghost-num .g5{color:rgba(17,17,17,0.04);filter:blur(11px);animation:floatE 37s ease-in-out infinite}
+  .ghost-num .gOut{color:transparent;-webkit-text-stroke:1px rgba(226,52,29,0.5);animation:floatB 23s ease-in-out infinite}
   .hero-square{position:absolute;left:1.5%;top:56%;width:clamp(16px,2vw,30px);aspect-ratio:1;background:var(--accent);opacity:.45;animation:sq 6.5s ease-in-out infinite}
   .hero-circle{position:absolute;right:3%;bottom:-14%;width:clamp(180px,26vw,380px);aspect-ratio:1;border:1px solid rgba(226,52,29,0.16);border-radius:50%;animation:spin 80s linear infinite}
   .hero-circle.c2{right:auto;left:-7%;top:-20%;bottom:auto;width:clamp(150px,22vw,320px);border-color:rgba(17,17,17,0.08);animation:spin 120s linear infinite reverse}
@@ -103,8 +104,8 @@
 
   /* hero photo — right side, above the ghost 21, behind the name */
   .hero-photo{
-    position:absolute;z-index:2;left:60%;transform:translateX(calc(-50% + 160px));bottom:-52px;
-    height:clamp(336px,36.8vw,608px);width:auto;pointer-events:none;
+    position:absolute;z-index:4;left:60%;transform:translateX(calc(-50% + 160px));bottom:-52px;
+    height:clamp(269px,29.4vw,486px);width:auto;pointer-events:none;
     opacity:.97;
     filter:saturate(.98) contrast(1.02) drop-shadow(0 16px 26px rgba(17,17,17,0.13));
   }
@@ -207,6 +208,7 @@
     <div class="lines"></div>
     <div class="ghost-num">
       <div class="layer" data-depth="14"><span class="num g5">21</span></div>
+      <div class="layer" data-depth="34"><span class="num gOut">21</span></div>
       <div class="layer" data-depth="26"><span class="num g4">21</span></div>
       <div class="layer" data-depth="40"><span class="num g3">21</span></div>
       <div class="layer" data-depth="58"><span class="num g2">21</span></div>
@@ -218,7 +220,7 @@
   </div>
   <img class="hero-photo" src="cruzhero.png" alt="Cruz Paguirigan running" data-scroll="-0.05" />
   <div class="grid">
-    <h1>Cruz<br><span style="background:linear-gradient(100deg,#111 5%,#e2341d 75%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent">Paguirigan</span><span class="stop">.</span></h1>
+    <h1>Cruz<br><span style="background:linear-gradient(100deg,#111 8%,#e2341d 50%,#111 92%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent">Paguirigan</span><span class="stop">.</span></h1>
   </div>
 </section>
 
