@@ -1,0 +1,83 @@
+/*
+  Cruzio Dash — page shell.
+
+  The game canvas fills the whole screen, portrait or landscape.
+  The browser is not allowed to scroll, zoom, or select text,
+  so a tap always jumps instead of moving the page.
+*/
+
+:root {
+  --sky: #6ec6ff;
+  /* Used by game.js to keep the score clear of a phone notch. */
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sal: env(safe-area-inset-left);
+  --sab: env(safe-area-inset-bottom);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  /* Lock the page to the visible screen. No rubber-band scroll. */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky);
+  color: #142033;
+  /* "none" turns off pinch-zoom, pan, and double-tap zoom. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+#game {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: block;
+  /* Width and height are set in game.js so they match the phone. */
+  touch-action: none;
+  cursor: pointer;
+}
+
+/* Small way back to the soccer site. Taps here do not jump. */
+#home {
+  position: fixed;
+  z-index: 2;
+  top: max(8px, var(--sat));
+  left: max(8px, var(--sal));
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 3px solid #142033;
+  background: #f7fbff;
+  color: #142033;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  /* The link itself can be tapped; the rest of the page cannot zoom. */
+  touch-action: manipulation;
+}
+
+#home:focus-visible {
+  outline: 3px solid #142033;
+  outline-offset: 2px;
+}
