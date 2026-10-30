@@ -1401,8 +1401,64 @@ function drawQ(o, x, top) {
   }
 }
 
+// How strongly the bright edge glows. The dark red under it always stays.
+function hazardAlpha() {
+  if (reduceMotion) return 1;
+  return 0.78 + 0.22 * Math.sin(performance.now() / 280);
+}
+
+// Red means "touching this hurts."
+// kind "all"  = every side is dangerous (spikes).
+// kind "stomp" = sides and bottom are dangerous, the top is safe to land on.
+function drawDangerBox(x, top, w, h, kind) {
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#8d0014";
+  ctx.fillRect(x - 2, top, 2, h);
+  ctx.fillRect(x + w, top, 2, h);
+  ctx.fillRect(x - 2, top + h, w + 4, 2);
+  ctx.globalAlpha = hazardAlpha();
+  ctx.fillStyle = "#ff2424";
+  ctx.fillRect(x - 2, top, 2, h);
+  ctx.fillRect(x + w, top, 2, h);
+  ctx.fillRect(x - 2, top + h, w + 4, 2);
+  if (kind === "stomp") {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#146b32";
+    ctx.fillRect(x - 2, top - 3, w + 4, 3);
+    ctx.globalAlpha = hazardAlpha();
+    ctx.fillStyle = "#39ff6a";
+    ctx.fillRect(x - 2, top - 3, w + 4, 3);
+    const mid = x + Math.floor(w / 2) - 1;
+    ctx.fillRect(mid, top - 7, 2, 3);
+    ctx.fillRect(mid - 2, top - 5, 6, 2);
+  } else {
+    ctx.fillRect(x - 2, top - 2, w + 4, 2);
+  }
+  ctx.restore();
+}
+
 function drawSpike(o, x) {
   const base = worldY(o.y);
+  // A slightly bigger red triangle sits behind the spike, so the point reads as danger.
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#8d0014";
+  for (let i = -2; i <= o.h + 1; i++) {
+    const y = base - 1 - i;
+    const half = Math.max(2, Math.round(((o.w / 2) + 3) * (1 - (i + 2) / (o.h + 4))));
+    const cx = x + o.w / 2;
+    ctx.fillRect(Math.round(cx - half), y, half * 2, 1);
+  }
+  ctx.globalAlpha = hazardAlpha();
+  ctx.fillStyle = "#ff2424";
+  for (let i = -1; i <= o.h; i++) {
+    const y = base - 1 - i;
+    const half = Math.max(2, Math.round(((o.w / 2) + 2) * (1 - (i + 1) / (o.h + 2))));
+    const cx = x + o.w / 2;
+    ctx.fillRect(Math.round(cx - half), y, half * 2, 1);
+  }
+  ctx.restore();
   for (let i = 0; i < o.h; i++) {
     const y = base - 1 - i;
     const half = Math.max(1, Math.round((o.w / 2) * (1 - i / o.h)));
@@ -1412,6 +1468,22 @@ function drawSpike(o, x) {
     ctx.fillStyle = "#2a3038";
     ctx.fillRect(Math.round(cx + half - 1), y, 1, 1);
   }
+}
+
+function drawPitDanger(o, x) {
+  const gy = horizon();
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#8d0014";
+  ctx.fillRect(x, gy, o.w, 3);
+  ctx.fillRect(x, gy, 3, 14);
+  ctx.fillRect(x + o.w - 3, gy, 3, 14);
+  ctx.globalAlpha = hazardAlpha();
+  ctx.fillStyle = "#ff2424";
+  ctx.fillRect(x, gy, o.w, 2);
+  ctx.fillRect(x, gy, 2, 12);
+  ctx.fillRect(x + o.w - 2, gy, 2, 12);
+  ctx.restore();
 }
 
 function drawCoin(o, x) {
@@ -1465,16 +1537,18 @@ function drawObstacles(cam) {
     else if (o.type === "block") drawBlock(o, x, top);
     else if (o.type === "q") drawQ(o, x, top);
     else if (o.type === "spike") drawSpike(o, x);
+    else if (o.type === "pit") drawPitDanger(o, x);
     else if (o.type === "coin") drawCoin(o, x);
     else if (o.type === "pole") drawPole(o, x);
     else if (o.type === "deco") drawDeco(o, x);
-    else if (o.type === "bug") {
-      drawSprite(BUG_SPRITE, x, worldY(o.y + BUG_SPRITE.length), bugColor);
-    } else if (o.type === "fish") {
-      drawSprite(FISH_SPRITE, x, worldY(o.y + FISH_SPRITE.length), fishColor);
-    } else if (o.type === "glider") {
-      const bob = Math.floor(performance.now() / 180) % 2;
-      drawSprite(GLIDER_SPRITE, x, worldY(o.y + GLIDER_SPRITE.length) + bob, gliderColor);
+    else if (o.type === "bug" || o.type === "fish" || o.type === "glider") {
+      const art = o.type === "bug" ? BUG_SPRITE : o.type === "fish" ? FISH_SPRITE : GLIDER_SPRITE;
+      const paint = o.type === "bug" ? bugColor : o.type === "fish" ? fishColor : gliderColor;
+      const bob = o.type === "glider" ? Math.floor(performance.now() / 180) % 2 : 0;
+      const top = worldY(o.y + art.length) + bob;
+      drawSprite(art, x, top, paint);
+      // These three can be stomped. Sides stay red. The green top means "land here."
+      drawDangerBox(x, top, art[0].length, art.length, "stomp");
     }
   }
 }
@@ -1594,9 +1668,12 @@ function drawBanner() {
 
 function drawOverlay() {
   if (state.mode === "title") {
+    const hint = "RED HURTS. STOMP GREEN TOPS.";
+    const hintScale = textWidth(hint, 2) <= viewW - 28 ? 2 : 1;
     drawMessage([
       { text: "CRUZIO DASH", scale: viewW > 280 ? 3 : 2 },
       { text: "HOLD TO JUMP", scale: 2 },
+      { text: hint, scale: hintScale },
       { text: "BEST " + state.best, scale: 2 }
     ]);
     return;
