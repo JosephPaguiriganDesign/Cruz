@@ -52,12 +52,28 @@ body {
   cursor: pointer;
 }
 
-/* Home and mute sit on top of the canvas. Taps here do not jump. */
+/* Home and the sound buttons sit on top of the canvas. Taps here do not jump. */
 #home,
-#mute {
+#soundbar {
   position: fixed;
   z-index: 2;
   top: max(8px, var(--sat));
+}
+
+#home {
+  left: max(8px, var(--sal));
+}
+
+/* Music sits just to the left of Sfx. */
+#soundbar {
+  right: max(8px, var(--sar));
+  display: flex;
+  gap: 8px;
+}
+
+#home,
+#music,
+#mute {
   min-height: 44px;
   min-width: 44px;
   display: flex;
@@ -77,10 +93,8 @@ body {
   cursor: pointer;
 }
 
-#home { left: max(8px, var(--sal)); }
-#mute { right: max(8px, var(--sar)); }
-
 #home:focus-visible,
+#music:focus-visible,
 #mute:focus-visible {
   outline: 3px solid #142033;
   outline-offset: 2px;
