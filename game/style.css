@@ -52,12 +52,12 @@ body {
   cursor: pointer;
 }
 
-/* Small way back to the soccer site. Taps here do not jump. */
-#home {
+/* Home and mute sit on top of the canvas. Taps here do not jump. */
+#home,
+#mute {
   position: fixed;
   z-index: 2;
   top: max(8px, var(--sat));
-  left: max(8px, var(--sal));
   min-height: 44px;
   min-width: 44px;
   display: flex;
@@ -73,11 +73,15 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
-  /* The link itself can be tapped; the rest of the page cannot zoom. */
   touch-action: manipulation;
+  cursor: pointer;
 }
 
-#home:focus-visible {
+#home { left: max(8px, var(--sal)); }
+#mute { right: max(8px, var(--sar)); }
+
+#home:focus-visible,
+#mute:focus-visible {
   outline: 3px solid #142033;
   outline-offset: 2px;
 }
