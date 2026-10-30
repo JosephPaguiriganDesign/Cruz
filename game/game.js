@@ -9,8 +9,10 @@
 
   There are seven places. Each one looks different.
   Reach the pennant pole to finish a stage. A gate appears,
-  then the next place starts a little faster.
-  After the last place, they repeat, faster each lap.
+  then the next place starts. The counter reads 1-1, 1-2,
+  up through 1-7, then 2-1, and so on.
+  Later stages, and the far end of each stage, pack the
+  road tighter: shorter gaps, more obstacles at once.
 
   Coins add to your score. Bump a "?" block from underneath
   to pop a coin out. Your best score stays on this device.
@@ -19,7 +21,8 @@
   Nothing is loaded from an image.
 
   The sizes of pits, pipes, and gaps were checked so a
-  full-height jump can always get through.
+  full-height jump can always get through. Early in 1-1
+  the road stays open. Density climbs after that.
 */
 
 "use strict";
@@ -93,7 +96,12 @@ const SCENES = [
     pipeDark: "#1b7a30",
     accent: "#e23b3b",
     ink: "#142033",
-    kinds: ["coins", "spike", "spike2", "pipeS", "pipeT", "qblock", "stair", "bug", "bridge", "pit"]
+    // gentle shows up first. mid joins once the stage has started.
+    // hard is a combo. later waits for loop 2 and beyond.
+    gentle: ["coins", "spike", "pipeS", "qblock"],
+    mid: ["bug", "spike2", "bridge", "stair", "pit", "pipeT"],
+    hard: ["bugRow", "coinPit", "patrol", "pipeSpike", "mover"],
+    later: ["popper", "bugTrio", "pyramidPit"]
   },
   {
     id: "lagoon",
@@ -119,7 +127,10 @@ const SCENES = [
     pipeDark: "#1a5a50",
     accent: "#ff7a8a",
     ink: "#062028",
-    kinds: ["coins", "coral", "fish", "fishHigh", "qblock", "weed", "pit"]
+    gentle: ["coins", "coral", "weed"],
+    mid: ["fish", "fishHigh", "qblock", "pit"],
+    hard: ["school", "coinPit", "mover", "patrol"],
+    later: ["schoolWide", "popper"]
   },
   {
     id: "canopy",
@@ -145,7 +156,10 @@ const SCENES = [
     pipeDark: "#5a3418",
     accent: "#d2f06a",
     ink: "#142010",
-    kinds: ["coins", "trunk", "pit", "pitTrunk", "glider", "gliderHigh", "bug"]
+    gentle: ["coins", "trunk"],
+    mid: ["pit", "glider", "gliderHigh", "bug", "pitTrunk"],
+    hard: ["swarm", "staggerTree", "patrol", "coinPit"],
+    later: ["swarmWide", "popper"]
   },
   {
     id: "cloudway",
@@ -171,7 +185,10 @@ const SCENES = [
     pipeDark: "#b7cce0",
     accent: "#f2c14e",
     ink: "#243044",
-    kinds: ["coinArc", "pit", "highCloud", "island", "coins"]
+    gentle: ["coins", "coinArc", "highCloud"],
+    mid: ["pit", "island"],
+    hard: ["mover", "staggerCloud", "coinPit", "swarm"],
+    later: ["swarmWide"]
   },
   {
     id: "steps",
@@ -197,7 +214,10 @@ const SCENES = [
     pipeDark: "#7a3424",
     accent: "#ffd15c",
     ink: "#241810",
-    kinds: ["pyramid", "pyramidGap", "spike", "qblock", "coins", "bug"]
+    gentle: ["coins", "pyramid", "qblock"],
+    mid: ["spike", "bug", "stair", "pyramidGap"],
+    hard: ["pyramidTall", "bugRow", "coinPit", "patrol"],
+    later: ["pyramidPit", "bugTrio", "popper"]
   },
   {
     id: "grove",
@@ -223,7 +243,10 @@ const SCENES = [
     pipeDark: "#c8a070",
     accent: "#ffe08a",
     ink: "#2a1408",
-    kinds: ["shroom", "shroomPit", "coins", "bug", "qblock"]
+    gentle: ["coins", "shroom", "qblock"],
+    mid: ["bug", "shroomPit"],
+    hard: ["staggerShroom", "patrol", "coinPit", "mover"],
+    later: ["popper", "bugRow", "bugTrio"]
   },
   {
     id: "night",
@@ -249,7 +272,10 @@ const SCENES = [
     pipeDark: "#2e3248",
     accent: "#f0e6c0",
     ink: "#f4f0e8",
-    kinds: ["spike2", "pillar", "bug", "pit", "stair", "qblock", "spike"]
+    gentle: ["coins", "spike", "qblock"],
+    mid: ["pillar", "bug", "pit", "stair", "spike2"],
+    hard: ["bugRow", "swarm", "pipeSpike", "pyramidPit"],
+    later: ["popper", "bugTrio", "swarmWide"]
   }
 ];
 
@@ -257,8 +283,72 @@ function sceneDef() {
   return SCENES[state.sceneIndex % SCENES.length];
 }
 
+function worldNumber() {
+  return Math.floor(state.sceneIndex / SCENES.length) + 1;
+}
+
+function stageInWorld() {
+  return (state.sceneIndex % SCENES.length) + 1;
+}
+
+// "1-1", "1-2", ... "2-1". The first number is the loop.
+function stageLabel() {
+  return worldNumber() + "-" + stageInWorld();
+}
+
 function stageNumber() {
-  return state.sceneIndex + 1;
+  return stageLabel();
+}
+
+// 0 at the opening of 1-1. Climbs along a stage, then again
+// at each new stage, then again when the seven places loop.
+function stageHeat(along) {
+  let a = along;
+  if (a == null) a = (player.x - state.levelStartX) / LEVEL_LEN;
+  if (a < 0) a = 0;
+  if (a > 1) a = 1;
+  return state.sceneIndex * 0.12 + a * 1.35;
+}
+
+// Empty ground between two obstacles. Wide at the start of 1-1,
+// shorter by the end of a stage and shorter still on later loops.
+// The floor stays longer than a full jump at top speed, so a jump
+// that clears one piece still lands before the next piece.
+function gapForHeat(h) {
+  const g = Math.round(260 - h * 40);
+  if (g < 136) return 136;
+  return g;
+}
+
+function pushKinds(pool, list, times) {
+  if (!list || !list.length) return;
+  const n = times || 1;
+  for (let t = 0; t < n; t++) {
+    for (let i = 0; i < list.length; i++) pool.push(list[i]);
+  }
+}
+
+// Which pieces this stretch of road is allowed to use.
+function kindsFor(scene, heat, world) {
+  const pool = [];
+  pushKinds(pool, scene.gentle, 1);
+  if (heat >= 0.34) pushKinds(pool, scene.mid, 1);
+  if (heat >= 0.92) pushKinds(pool, scene.hard, 1);
+  if (heat >= 1.2) pushKinds(pool, scene.hard, 1);
+  if (heat >= 1.8) pushKinds(pool, scene.hard, 1);
+  if (world >= 2 && heat >= 1.35) pushKinds(pool, scene.later, 1);
+  if (world >= 2 && heat >= 2.1) pushKinds(pool, scene.later, 1);
+  if (world >= 3) pushKinds(pool, scene.later, 1);
+  return pool;
+}
+
+function pickKind(scene, heat, count, world) {
+  const gentle = scene.gentle;
+  if (!gentle || !gentle.length) return "coins";
+  if (count === 0) return gentle[0];
+  if (heat < 0.34) return gentle[Math.floor(Math.random() * gentle.length)];
+  const pool = kindsFor(scene, heat, world == null ? worldNumber() : world);
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ============================================================
@@ -484,7 +574,9 @@ const state = {
   clearFor: 0,
   shake: 0,
   bannerT: 0,
-  hasJumped: false
+  hasJumped: false,
+  clock: 0,
+  paused: false
 };
 
 let holding = false;
@@ -644,6 +736,35 @@ function addObj(obj) {
   obstacles.push(obj);
 }
 
+// A critter that stays in its own lane. span is how far it may wander.
+function addCritter(type, x, y, vx, span) {
+  const w = type === "bug" ? 14 : 16;
+  const h = 12;
+  const reach = span == null ? 18 : span;
+  addObj({
+    type: type, x: x, y: y, w: w, h: h, vx: vx, home: x,
+    left: x - reach, right: x + w + reach
+  });
+}
+
+function addStairs(x, steps) {
+  const cols = steps * 2 - 1;
+  for (let i = 0; i < cols; i++) {
+    const level = i < steps ? i + 1 : cols - i;
+    addObj({ type: "block", x: x + i * TILE, y: 0, w: TILE, h: level * TILE });
+  }
+  return cols * TILE;
+}
+
+function addFlyerCluster(type, x, yLift) {
+  // Three flyers, staggered in height, close enough to clear in one jump
+  // and far enough apart that they never share the same column.
+  addCritter(type, x, 2 + yLift, -18, 10);
+  addCritter(type, x + 28, 30 + yLift, -16, 10);
+  addCritter(type, x + 56, 6 + yLift, -18, 10);
+  return 78;
+}
+
 function makePattern(kind, x) {
   if (kind === "coins") {
     for (let i = 0; i < 4; i++) addObj({ type: "coin", x: x + i * 16, y: 36, w: 10, h: 10 });
@@ -656,14 +777,43 @@ function makePattern(kind, x) {
     }
     return 80;
   }
+  if (kind === "coinPit") {
+    // A coin arc sitting over a pit, so the jump that clears it also pays.
+    addObj({ type: "pit", x: x + 16, w: 32 });
+    for (let i = 0; i < 5; i++) {
+      const lift = Math.sin((i / 4) * Math.PI) * 42;
+      addObj({ type: "coin", x: x + 8 + i * 12, y: 16 + lift, w: 10, h: 10 });
+    }
+    return 16 + 32 + 24;
+  }
   if (kind === "spike" || kind === "spike2") {
-    const n = kind === "spike2" ? 3 : 1;
+    // Two spikes is the busier version. Three in a solid row is wider
+    // than a full jump at the speed this piece first shows up.
+    const n = kind === "spike2" ? 2 : 1;
     for (let i = 0; i < n; i++) addObj({ type: "spike", x: x + i * 14, y: 0, w: 14, h: 12 });
     return n * 14;
   }
   if (kind === "pipeS") {
     addObj({ type: "pipe", x: x, y: 0, w: 18, h: 16 });
     return 18;
+  }
+  if (kind === "pipeSpike") {
+    // A short pipe, then spikes. Step onto the pipe, hop the spikes,
+    // or clear both in one jump once the road is moving faster.
+    addObj({ type: "pipe", x: x, y: 0, w: 18, h: 16 });
+    addObj({ type: "spike", x: x + 18 + 28, y: 0, w: 14, h: 12 });
+    addObj({ type: "spike", x: x + 18 + 42, y: 0, w: 14, h: 12 });
+    return 18 + 42 + 14;
+  }
+  if (kind === "popper") {
+    // A short pipe with a pod that rises out of the mouth and sinks back.
+    // Jumping over the pipe clears it whether the pod is up or down.
+    addObj({ type: "pipe", x: x, y: 0, w: 18, h: 16, mouth: true });
+    addObj({
+      type: "snap", x: x + 2, y: 16, w: 14, h: 18,
+      phase: Math.random() * 2.2, period: 2.6, out: false
+    });
+    return 28;
   }
   if (kind === "pipeT" || kind === "pillar" || kind === "trunk") {
     const h = kind === "trunk" ? 46 : 42;
@@ -675,30 +825,73 @@ function makePattern(kind, x) {
     addObj({ type: "coin", x: x + 3, y: 78, w: 10, h: 10 });
     return 16;
   }
-  if (kind === "stair" || kind === "pyramid") {
-    const steps = 3;
-    const cols = steps * 2 - 1;
-    for (let i = 0; i < cols; i++) {
-      const level = i < steps ? i + 1 : cols - i;
-      addObj({ type: "block", x: x + i * TILE, y: 0, w: TILE, h: level * TILE });
-    }
-    return cols * TILE;
-  }
+  if (kind === "stair" || kind === "pyramid") return addStairs(x, 3);
+  if (kind === "pyramidTall") return addStairs(x, 4);
   if (kind === "pyramidGap") {
-    const w1 = makePattern("pyramid", x);
-    addObj({ type: "pit", x: x + w1 + 8, w: 34 });
-    const w2 = makePattern("pyramid", x + w1 + 8 + 34 + 8);
-    return w1 + 8 + 34 + 8 + w2;
+    const w1 = addStairs(x, 3);
+    const runway = 40;
+    const pitW = 32;
+    addObj({ type: "pit", x: x + w1 + runway, w: pitW });
+    const w2 = addStairs(x + w1 + runway + pitW + runway, 3);
+    return w1 + runway + pitW + runway + w2;
+  }
+  if (kind === "pyramidPit") {
+    // Two tall stair pyramids with a pit between them.
+    const w1 = addStairs(x, 4);
+    const runway = 42;
+    const pitW = 32;
+    addObj({ type: "pit", x: x + w1 + runway, w: pitW });
+    for (let i = 0; i < 3; i++) {
+      const lift = Math.sin((i / 2) * Math.PI) * 36;
+      addObj({ type: "coin", x: x + w1 + runway + 4 + i * 10, y: 18 + lift, w: 10, h: 10 });
+    }
+    const w2 = addStairs(x + w1 + runway + pitW + runway, 4);
+    return w1 + runway + pitW + runway + w2;
   }
   if (kind === "bug") {
-    addObj({ type: "bug", x: x + 20, y: 0, w: 14, h: 12, vx: -26, home: x + 20 });
-    return 50;
+    addCritter("bug", x + 16, 0, -24, 20);
+    return 56;
+  }
+  if (kind === "bugRow" || kind === "bugTrio") {
+    // Far enough apart that a full jump at top speed lands between them,
+    // even if each bug has shuffled a step to the side.
+    const n = kind === "bugTrio" ? 3 : 2;
+    const spacing = 142;
+    for (let i = 0; i < n; i++) addCritter("bug", x + 12 + i * spacing, 0, -22, 6);
+    return 12 + (n - 1) * spacing + 36;
   }
   if (kind === "bridge") {
     addObj({ type: "block", x: x, y: 40, w: TILE * 3, h: TILE, float: true });
     addObj({ type: "coin", x: x + 8, y: 70, w: 10, h: 10 });
     addObj({ type: "coin", x: x + 28, y: 70, w: 10, h: 10 });
     return TILE * 3;
+  }
+  if (kind === "patrol") {
+    // A bridge over a short pit. The bug patrols only the right half,
+    // so the left lip is always a safe place to land.
+    const deckY = 22;
+    const deckW = 84;
+    addObj({ type: "pit", x: x + 26, w: 30 });
+    addObj({ type: "block", x: x + 10, y: deckY, w: deckW, h: 12, float: true });
+    const bugX = x + 10 + 48;
+    addCritter("bug", bugX, deckY + 12, -18, 8);
+    addObj({ type: "coin", x: x + 18, y: deckY + 30, w: 10, h: 10 });
+    return 10 + deckW + 12;
+  }
+  if (kind === "mover") {
+    // A deck that slides a few pixels over a pit it always covers.
+    // The pit is also short enough to clear if you crest the deck.
+    const deckY = 24;
+    const deckW = 72;
+    const base = x + 18;
+    addObj({ type: "pit", x: x + 36, w: 28 });
+    addObj({
+      type: "block", x: base, y: deckY, w: deckW, h: 12, float: true, slide: true,
+      sLeft: base - 6, sRight: base + 6, svx: 14
+    });
+    addObj({ type: "coin", x: base + 20, y: deckY + 32, w: 10, h: 10 });
+    addObj({ type: "coin", x: base + 40, y: deckY + 36, w: 10, h: 10 });
+    return 18 + deckW + 16;
   }
   if (kind === "pit" || kind === "island") {
     addObj({ type: "pit", x: x, w: 34 });
@@ -718,31 +911,61 @@ function makePattern(kind, x) {
     return 36;
   }
   if (kind === "fish") {
-    addObj({ type: "fish", x: x + 10, y: 0, w: 16, h: 12, vx: -22, home: x + 10 });
-    return 40;
+    addCritter("fish", x + 10, 0, -22, 18);
+    return 48;
   }
   if (kind === "fishHigh") {
-    addObj({ type: "fish", x: x, y: 40, w: 16, h: 12, vx: -18, home: x });
-    return 30;
+    addCritter("fish", x + 8, 40, -18, 14);
+    return 44;
+  }
+  if (kind === "school" || kind === "schoolWide") {
+    let w = addFlyerCluster("fish", x, 0);
+    if (kind === "schoolWide") w += 150 + addFlyerCluster("fish", x + w + 150, 4);
+    return w + 16;
   }
   if (kind === "glider") {
-    addObj({ type: "glider", x: x + 10, y: 0, w: 16, h: 12, vx: -20, home: x + 10 });
-    return 46;
+    addCritter("glider", x + 10, 0, -20, 18);
+    return 50;
   }
   if (kind === "gliderHigh") {
-    addObj({ type: "glider", x: x, y: 44, w: 16, h: 12, vx: -16, home: x });
-    return 30;
+    addCritter("glider", x + 8, 40, -16, 14);
+    return 44;
+  }
+  if (kind === "swarm" || kind === "swarmWide") {
+    let w = addFlyerCluster("glider", x, 0);
+    if (kind === "swarmWide") w += 150 + addFlyerCluster("glider", x + w + 150, 2);
+    return w + 16;
   }
   if (kind === "pitTrunk") {
-    addObj({ type: "pit", x: x, w: 32 });
-    addObj({ type: "trunk", x: x + 32, y: 0, w: 26, h: 36 });
-    return 58;
+    addObj({ type: "pit", x: x, w: 30 });
+    addObj({ type: "trunk", x: x + 30 + 16, y: 0, w: 22, h: 36 });
+    return 30 + 16 + 22;
   }
   if (kind === "highCloud") {
     addObj({ type: "block", x: x, y: 48, w: 52, h: 12, float: true, cloud: true });
     addObj({ type: "coin", x: x + 8, y: 74, w: 10, h: 10 });
     addObj({ type: "coin", x: x + 28, y: 82, w: 10, h: 10 });
     return 52;
+  }
+  if (kind === "staggerTree") {
+    // Two leafy tops at different heights. The pit sits between them,
+    // not under them, so a landing is never trapped against a ceiling.
+    addObj({ type: "block", x: x, y: 22, w: 52, h: 12, float: true, leaf: true });
+    addObj({ type: "pit", x: x + 52 + 8, w: 30 });
+    const b = x + 52 + 8 + 30 + 8;
+    addObj({ type: "block", x: b, y: 44, w: 58, h: 12, float: true, leaf: true });
+    addObj({ type: "coin", x: x + 16, y: 50, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 52 + 12, y: 26, w: 10, h: 10 });
+    return (b - x) + 58;
+  }
+  if (kind === "staggerCloud") {
+    addObj({ type: "block", x: x, y: 26, w: 56, h: 12, float: true, cloud: true });
+    addObj({ type: "pit", x: x + 56 + 8, w: 30 });
+    const b = x + 56 + 8 + 30 + 8;
+    addObj({ type: "block", x: b, y: 48, w: 60, h: 12, float: true, cloud: true });
+    addObj({ type: "coin", x: x + 16, y: 54, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 56 + 12, y: 28, w: 10, h: 10 });
+    return (b - x) + 60;
   }
   if (kind === "shroom") {
     // Wide cap with a narrow stem. Jump onto the cap, run across, drop off.
@@ -754,8 +977,22 @@ function makePattern(kind, x) {
   }
   if (kind === "shroomPit") {
     const w = makePattern("shroom", x);
-    addObj({ type: "pit", x: x + w + 10, w: 32 });
-    return w + 10 + 32 + 16;
+    // Room to land after stepping off the cap, then a pit a full jump can clear.
+    addObj({ type: "pit", x: x + w + 40, w: 30 });
+    return w + 40 + 30 + 24;
+  }
+  if (kind === "staggerShroom") {
+    // Two mushroom caps over a pit, the second one higher.
+    // Each stem sits under the right side so the left lip is a landing.
+    addObj({ type: "block", x: x, y: 24, w: 64, h: 14, float: true, shroom: true });
+    addObj({ type: "pipe", x: x + 34, y: 0, w: 14, h: 24, stem: true });
+    addObj({ type: "pit", x: x + 64 + 10, w: 28 });
+    const b = x + 64 + 10 + 28 + 10;
+    addObj({ type: "block", x: b, y: 44, w: 72, h: 14, float: true, shroom: true });
+    addObj({ type: "pipe", x: b + 40, y: 0, w: 14, h: 44, stem: true });
+    addObj({ type: "coin", x: x + 12, y: 54, w: 10, h: 10 });
+    addObj({ type: "coin", x: b + 12, y: 74, w: 10, h: 10 });
+    return (b - x) + 72;
   }
   return 0;
 }
@@ -765,11 +1002,14 @@ function spawnAhead() {
   const scene = sceneDef();
   const endX = state.levelStartX + LEVEL_LEN;
   let guard = 0;
-  while (state.cursor < cameraX + viewW + 140 && state.cursor < endX - 30 && guard < 14) {
+  while (state.cursor < cameraX + viewW + 140 && state.cursor < endX - 30 && guard < 24) {
     guard += 1;
-    if (state.patternCount > 0) state.cursor += MIN_GAP;
-    const kinds = scene.kinds;
-    const kind = state.patternCount === 0 ? kinds[0] : kinds[Math.floor(Math.random() * kinds.length)];
+    if (state.patternCount > 0) {
+      const along = (state.cursor - state.levelStartX) / LEVEL_LEN;
+      state.cursor += gapForHeat(stageHeat(along));
+    }
+    const along = (state.cursor - state.levelStartX) / LEVEL_LEN;
+    const kind = pickKind(scene, stageHeat(along), state.patternCount);
     state.patternCount += 1;
     state.cursor += makePattern(kind, state.cursor);
   }
@@ -921,9 +1161,42 @@ function advanceScene() {
 function moveActors(dt) {
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.dead || o.got || !o.vx) continue;
-    o.x += o.vx * dt;
-    if (o.home != null && (o.x < o.home - 64 || o.x > o.home + 24)) o.vx *= -1;
+    if (o.dead || o.got) continue;
+    const prev = o.x;
+    if (o.vx) {
+      o.x += o.vx * dt;
+      if (o.left != null && o.right != null) {
+        if (o.x < o.left) {
+          o.x = o.left;
+          o.vx = Math.abs(o.vx);
+        } else if (o.x + o.w > o.right) {
+          o.x = o.right - o.w;
+          o.vx = -Math.abs(o.vx);
+        }
+      } else if (o.home != null && (o.x < o.home - 64 || o.x > o.home + 24)) {
+        o.vx *= -1;
+      }
+    }
+    if (o.slide && o.svx) {
+      o.x += o.svx * dt;
+      if (o.x < o.sLeft) {
+        o.x = o.sLeft;
+        o.svx = Math.abs(o.svx);
+      } else if (o.x > o.sRight) {
+        o.x = o.sRight;
+        o.svx = -Math.abs(o.svx);
+      }
+    }
+    if (o.type === "snap") {
+      const period = o.period || 2.6;
+      const cycle = ((state.clock || 0) + (o.phase || 0)) % period;
+      o.out = cycle < period * 0.42;
+    }
+    const dx = o.x - prev;
+    if (dx && o.float && player.onGround && state.mode === "play") {
+      const top = o.y + o.h;
+      if (Math.abs(player.y - top) < 1.5 && overlapX(player.x, o)) player.x += dx;
+    }
   }
 }
 
@@ -1005,7 +1278,7 @@ function touchHazards() {
         continue;
       }
     }
-    if (o.type === "spike" || enemy) {
+    if (o.type === "spike" || enemy || (o.type === "snap" && o.out)) {
       if (hit(box, hazardBox(o))) { die(); return; }
     }
     if (o.type === "coin" && hit(box, o)) {
@@ -1097,6 +1370,8 @@ function updatePlay(dt) {
 }
 
 function update(dt) {
+  if (state.paused) return;
+  state.clock = (state.clock || 0) + dt;
   moveActors(dt);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
@@ -1155,6 +1430,8 @@ function resetRun() {
   state.shake = 0;
   state.bannerT = 2.6;
   state.stepAcc = 0;
+  state.clock = 0;
+  state.paused = false;
   state.bestAtStart = state.best;
   obstacles.length = 0;
   particles.length = 0;
@@ -1374,6 +1651,15 @@ function drawBlock(o, x, top) {
     fillDisk(mid, top + 3, 3, sc.accent);
     return;
   }
+  if (o.leaf) {
+    ctx.fillStyle = sc.grassDark;
+    ctx.fillRect(x, top + 4, o.w, o.h - 2);
+    ctx.fillStyle = sc.grass;
+    fillDisk(x + o.w / 2, top + 6, Math.floor(o.w / 2), sc.grass, 4);
+    ctx.fillStyle = sc.hillShade;
+    ctx.fillRect(x + 6, top + o.h - 3, o.w - 12, 2);
+    return;
+  }
   ctx.fillStyle = sc.mortar;
   ctx.fillRect(x, top, o.w, o.h);
   ctx.fillStyle = sc.brick;
@@ -1383,6 +1669,14 @@ function drawBlock(o, x, top) {
   ctx.fillStyle = sc.ink;
   ctx.fillRect(x, top, o.w, 1);
   ctx.fillRect(x, top, 1, o.h);
+  if (o.slide) {
+    ctx.fillStyle = sc.ink;
+    ctx.fillRect(x + 4, top + o.h - 3, 5, 3);
+    ctx.fillRect(x + o.w - 9, top + o.h - 3, 5, 3);
+    ctx.fillStyle = sc.accent;
+    ctx.fillRect(x + 5, top + o.h - 2, 3, 2);
+    ctx.fillRect(x + o.w - 8, top + o.h - 2, 3, 2);
+  }
 }
 
 function drawQ(o, x, top) {
@@ -1436,6 +1730,34 @@ function drawDangerBox(x, top, w, h, kind) {
     ctx.fillRect(x - 2, top - 2, w + 4, 2);
   }
   ctx.restore();
+}
+
+function drawSnap(o, x) {
+  const sc = sceneDef();
+  if (!o.out) {
+    // A closed bud at the lip. It is not dangerous while it is tucked in.
+    const lip = worldY(o.y + 5);
+    ctx.fillStyle = "#9a2438";
+    ctx.fillRect(x + 2, lip, o.w - 4, 4);
+    ctx.fillStyle = "#e23b4a";
+    ctx.fillRect(x + 3, lip + 1, o.w - 6, 2);
+    return;
+  }
+  const top = worldY(o.y + o.h);
+  ctx.fillStyle = sc.grassDark || "#1f7a32";
+  ctx.fillRect(x + 5, top + 10, o.w - 10, o.h - 10);
+  ctx.fillStyle = "#3aaa4a";
+  ctx.fillRect(x + 6, top + 10, 2, o.h - 10);
+  fillDisk(x + o.w / 2, top + 9, 7, "#e23b4a");
+  ctx.fillStyle = "#ffd0a8";
+  ctx.fillRect(x + 3, top + 8, o.w - 6, 2);
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(x + 3, top + 5, 2, 2);
+  ctx.fillRect(x + o.w - 5, top + 5, 2, 2);
+  ctx.fillStyle = "#fff6e8";
+  ctx.fillRect(x + 3, top + 4, 1, 1);
+  ctx.fillRect(x + o.w - 4, top + 4, 1, 1);
+  drawDangerBox(x, top, o.w, o.h, "all");
 }
 
 function drawSpike(o, x) {
@@ -1541,6 +1863,7 @@ function drawObstacles(cam) {
     else if (o.type === "coin") drawCoin(o, x);
     else if (o.type === "pole") drawPole(o, x);
     else if (o.type === "deco") drawDeco(o, x);
+    else if (o.type === "snap") drawSnap(o, x);
     else if (o.type === "bug" || o.type === "fish" || o.type === "glider") {
       const art = o.type === "bug" ? BUG_SPRITE : o.type === "fish" ? FISH_SPRITE : GLIDER_SPRITE;
       const paint = o.type === "bug" ? bugColor : o.type === "fish" ? fishColor : gliderColor;
@@ -1586,22 +1909,29 @@ function hudTop() {
   return Math.round(50 * (viewH / Math.max(1, cssH)) + 4);
 }
 
+function hudScale() {
+  // A tall phone is only about 150 pixels wide inside the game.
+  // Scale 2 labels would crash into each other there.
+  return viewW < 240 ? 1 : 2;
+}
+
 function drawHud() {
   if (state.mode === "title" || state.mode === "clear") return;
-  const sc = sceneDef();
   const y = hudTop();
-  const scale = 2;
+  const scale = hudScale();
   const score = "SCORE " + state.score;
   const best = "BEST " + state.best;
   const coin = "COIN " + state.coins;
+  const stage = stageLabel();
   drawLabel(score, viewW - 8 - textWidth(score, scale), y, scale);
   drawLabel(best, viewW - 8 - textWidth(best, scale), y + scale * 5 + 4, scale);
   drawLabel(coin, 8, y, scale);
+  const stageW = textWidth(stage, scale);
+  drawLabel(stage, Math.round((viewW - stageW) / 2), y, scale);
   if (state.mode === "play" && !state.hasJumped) {
     const hint = "HOLD TO JUMP";
     drawLabel(hint, Math.round((viewW - textWidth(hint, 2)) / 2), horizon() - 64, 2);
   }
-  if (sc) { /* scene name is on the banner */ }
 }
 
 function drawPanel(x, y, w, h) {
@@ -1660,9 +1990,10 @@ function drawBanner() {
   if (state.bannerT <= 0 || state.mode === "title" || state.mode === "dead") return;
   const sc = sceneDef();
   const title = stageNumber() + " " + sc.name;
-  const scale = textWidth(title, 2) < viewW - 16 ? 2 : 1;
-  // Keep the name under the score, above the jumps, so it does not cover Cruzio.
-  const y = hudTop() + scale * 5 + 8;
+  const scale = textWidth(title, 2) < viewW - 24 ? 2 : 1;
+  // Under both score lines, so it does not sit on top of BEST or the stage number.
+  const hud = hudScale();
+  const y = hudTop() + (hud * 5 + 4) * 2 + 6;
   drawLabel(title, Math.round((viewW - textWidth(title, scale)) / 2), y, scale);
 }
 
@@ -1693,11 +2024,14 @@ function drawOverlay() {
   if (state.mode === "clear") {
     ctx.fillStyle = "rgba(20, 32, 51, 0.35)";
     ctx.fillRect(0, 0, viewW, viewH);
-    const next = SCENES[(state.sceneIndex + 1) % SCENES.length];
+    const nextIndex = state.sceneIndex + 1;
+    const next = SCENES[nextIndex % SCENES.length];
+    const nextLabel = (Math.floor(nextIndex / SCENES.length) + 1) + "-" + ((nextIndex % SCENES.length) + 1);
     drawGate(Math.round(viewW / 2), Math.round(horizon() * 0.55));
     drawMessage([
       { text: "CLEAR", scale: 3 },
-      { text: "NEXT " + next.name, scale: 2 }
+      { text: "NEXT " + nextLabel, scale: 2 },
+      { text: next.name, scale: 2 }
     ]);
   }
 }
@@ -1847,11 +2181,49 @@ const api = {
   spawnAhead: spawnAhead,
   runSpeed: runSpeed,
   sceneDef: sceneDef,
+  stageLabel: stageLabel,
+  stageHeat: stageHeat,
+  gapForHeat: gapForHeat,
+  kindsFor: kindsFor,
+  pickKind: pickKind,
+  worldNumber: worldNumber,
   setHolding: function (v) { holding = v; },
   getHolding: function () { return holding; },
+  setView: function (w, h) { viewW = w; viewH = h; },
+  setCamera: function (x) { cameraX = x; },
+  getView: function () { return { w: viewW, h: viewH }; },
+  previewStage: previewStage,
   pitUnder: pitUnder,
-  die: die
+  die: die,
+  particles: particles
 };
+
+function previewStage(sceneIndex, along) {
+  const a = along == null ? 0 : along;
+  state.mode = "play";
+  state.sceneIndex = sceneIndex;
+  state.levelStartX = START_X - a * LEVEL_LEN;
+  state.goalSpawned = false;
+  state.patternCount = 0;
+  state.score = 120;
+  state.coins = 3;
+  state.cursor = START_X + 24;
+  state.bannerT = 3.2;
+  state.hasJumped = true;
+  state.clock = 0.4;
+  state.jumpBuffer = 0;
+  player.x = START_X;
+  player.y = 0;
+  player.prevY = 0;
+  player.vy = 0;
+  player.onGround = true;
+  player.wasHolding = false;
+  holding = false;
+  obstacles.length = 0;
+  particles.length = 0;
+  cameraX = player.x - viewW * FOCUS;
+  spawnAhead();
+}
 
 if (typeof globalThis !== "undefined") globalThis.Cruzio = api;
 
