@@ -23,20 +23,21 @@
 // ============================================================
 
 // Jump height is about (JUMP_V * JUMP_V) / (2 * GRAVITY).
-// 700 and 3200 gives a jump of ~77 pixels. Tall pipes are 60,
-// so a full jump clears them and a late jump does not.
-const GRAVITY = 3200;
-const JUMP_V = 700;
+// 680 and 2000 gives a jump of ~116 pixels that stays up for
+// about 0.7 seconds. That window is wide enough to clear every
+// pipe, spike row, and brick the course can place.
+const GRAVITY = 2000;
+const JUMP_V = 680;
 
 // How fast the course scrolls, in pixels per second.
-// It creeps up as the run gets longer.
-const SPEED_START = 96;
-const SPEED_MAX = 148;
+// It stays gentle for a while, then creeps up.
+const SPEED_START = 84;
+const SPEED_MAX = 130;
 
-// The hitbox is a bit smaller than the drawing, so a near miss
+// The hitbox is smaller than the drawing, so brushing an edge
 // still counts as a miss. That feels fair on a phone.
-const PLAYER_W = 10;
-const PLAYER_H = 13;
+const PLAYER_W = 8;
+const PLAYER_H = 12;
 
 // Where Cruzio sits on screen: 0 is the left edge, 1 is the right.
 const FOCUS = 0.28;
@@ -45,8 +46,9 @@ const FOCUS = 0.28;
 const START_X = 48;
 
 // A low brick hangs this many pixels above the ground.
-// Standing Cruzio fits under it. A jump hits it.
-const LOW_BRICK_Y = 24;
+// Standing Cruzio fits under it. Jumping into it is a crash,
+// so those only show up after the opening.
+const LOW_BRICK_Y = 26;
 
 const BEST_KEY = "cruzio-dash-best";
 
@@ -413,7 +415,7 @@ function onPress() {
   }
   // Remember the tap for a short moment. If Cruzio lands during that
   // window, he still jumps. Phones often tap a frame early.
-  state.jumpBuffer = 0.14;
+  state.jumpBuffer = 0.16;
 }
 
 function isHomeLink(target) {
@@ -464,29 +466,42 @@ document.addEventListener("contextmenu", function (e) {
 // then thrown away once they scroll off the left.
 // ============================================================
 
+function courseDist(x) {
+  return Math.max(0, x - START_X);
+}
+
 function difficulty() {
-  const dist = Math.max(0, player.x - START_X);
-  return Math.max(0, Math.min(1, dist / 6000));
+  // Full speed is a long way down the course, so the start stays calm.
+  return Math.max(0, Math.min(1, courseDist(player.x) / 9000));
+}
+
+// 0 = the first ~20 seconds. 3 = the far end of a long run.
+function bandAt(x) {
+  const dist = courseDist(x);
+  if (dist < 2000) return 0;
+  if (dist < 4200) return 1;
+  if (dist < 7000) return 2;
+  return 3;
 }
 
 function runSpeed() {
   const speed = SPEED_START + (SPEED_MAX - SPEED_START) * difficulty();
   // A tall phone shows less road ahead, so ease the pace a little.
-  if (viewH > viewW * 1.15) return speed * 0.74;
+  if (viewH > viewW * 1.15) return speed * 0.82;
   return speed;
 }
 
 function stampSpikes(x, count) {
-  const w = 14;
+  const w = 12;
   for (let i = 0; i < count; i++) {
-    obstacles.push({ type: "spike", x: x + i * w, y: 0, w: w, h: 14 });
+    obstacles.push({ type: "spike", x: x + i * w, y: 0, w: w, h: 12 });
   }
   return count * w;
 }
 
 function stampPipe(x, totalH) {
-  obstacles.push({ type: "pipe", x: x, y: 0, w: 32, h: totalH });
-  return 32;
+  obstacles.push({ type: "pipe", x: x, y: 0, w: 18, h: totalH });
+  return 18;
 }
 
 function stampBrick(x, y, cols, rows) {
@@ -505,54 +520,57 @@ function stampQuestion(x, y) {
   return 16;
 }
 
-// The first four obstacles are always the same, so a new player
-// can learn spike, pipe, brick, then the bonus block.
+// One named chunk of the course. Heights stay inside the jump arc:
+// a full hop clears them, and the gap afterward is long enough to land.
+function stampKind(kind, x) {
+  if (kind === "spike1") return stampSpikes(x, 1);
+  if (kind === "spike2") return stampSpikes(x, 2);
+  if (kind === "spike3") return stampSpikes(x, 3);
+  if (kind === "pipeS") return stampPipe(x, 18);
+  if (kind === "pipeM") return stampPipe(x, 32);
+  if (kind === "pipeT") return stampPipe(x, 44);
+  if (kind === "brick1") return stampBrick(x, 0, 1, 1);
+  if (kind === "brick2") return stampBrick(x, 0, 1, 2);
+  if (kind === "low") return stampBrick(x, LOW_BRICK_Y, 2, 1);
+  if (kind === "question") return stampQuestion(x, 48);
+  if (kind === "spikeQ") {
+    const w = stampSpikes(x, 1);
+    stampQuestion(x, 48);
+    return Math.max(w, 16);
+  }
+  return stampSpikes(x, 1);
+}
+
+function kindsAt(x) {
+  const band = bandAt(x);
+  // Band 0 is the opening: one short thing at a time.
+  const list = ["spike1", "pipeS", "brick1", "spikeQ", "question"];
+  if (band >= 1) list.push("spike2", "pipeM", "brick2");
+  if (band >= 2) list.push("pipeT", "low");
+  // Three spikes in a row need a bit of speed behind them, so they wait.
+  if (band >= 3) list.push("spike3");
+  return list;
+}
+
+// The first obstacles are always the same, so a new player
+// can learn spike, then a short pipe, then a brick.
 function stampNext(x) {
   const n = state.patternCount;
   state.patternCount += 1;
-  if (n === 0) return stampSpikes(x, 1);
-  if (n === 1) return stampPipe(x, 30);
-  if (n === 2) return stampBrick(x, 0, 1, 1);
-  if (n === 3) return stampQuestion(x, 46);
-  return stampRandom(x);
+  if (n === 0) return stampKind("spike1", x);
+  if (n === 1) return stampKind("pipeS", x);
+  if (n === 2) return stampKind("brick1", x);
+  if (n === 3) return stampKind("spike1", x);
+  if (n === 4) return stampKind("question", x);
+  const kinds = kindsAt(x);
+  // Early on, leave a blank patch fairly often so there is time to breathe.
+  const breather = bandAt(x) === 0 ? 0.18 : 0.08;
+  if (Math.random() < breather) return 0;
+  return stampKind(kinds[Math.floor(Math.random() * kinds.length)], x);
 }
 
-function stampRandom(x) {
-  const d = difficulty();
-  const roll = Math.random();
-
-  if (roll < 0.12) return 0;
-
-  if (d > 0.34 && roll > 0.84) {
-    // Three bricks in a row, floating. Run under them.
-    return stampBrick(x, LOW_BRICK_Y, 3, 1);
-  }
-
-  if (roll < 0.34) {
-    let count = 1;
-    if (d > 0.4 && Math.random() < 0.5) count = 2;
-    if (d > 0.72 && Math.random() < 0.4) count = 3;
-    const w = stampSpikes(x, count);
-    if (Math.random() < 0.6) stampQuestion(x, 46);
-    return Math.max(w, 16);
-  }
-
-  if (roll < 0.58) {
-    let h = 30;
-    if (d > 0.28 && Math.random() < 0.55) h = 46;
-    if (d > 0.58 && Math.random() < 0.4) h = 60;
-    return stampPipe(x, h);
-  }
-
-  if (roll < 0.78) {
-    const rows = (d > 0.36 && Math.random() < 0.5) ? 2 : 1;
-    return stampBrick(x, 0, 1, rows);
-  }
-
-  // Two spike groups with room to land between them.
-  const w = stampSpikes(x, 1);
-  const gap = d > 0.55 ? 42 : 58;
-  return w + gap + stampSpikes(x + w + gap, d > 0.65 ? 2 : 1);
+function minGapAt(x) {
+  return [190, 160, 140, 125][bandAt(x)];
 }
 
 function spawnAhead() {
@@ -561,9 +579,8 @@ function spawnAhead() {
   while (state.cursor < edge && guard < 30) {
     guard += 1;
     if (state.patternCount > 0) {
-      const d = difficulty();
-      const gap = Math.round(118 - d * 36 + Math.random() * 34);
-      state.cursor += gap;
+      // Never closer than minGapAt. A late jump still lands before the next one.
+      state.cursor += minGapAt(state.cursor) + Math.floor(Math.random() * 36);
     }
     state.cursor += stampNext(state.cursor);
   }
@@ -597,21 +614,23 @@ function overlap(a, b) {
     a.y + a.h > b.y;
 }
 
-// Spikes are pointy, so the dangerous part is the center, not the corners.
+// Spikes are pointy, so only the center counts.
+// Pipes and bricks lose a few pixels on the sides and the top,
+// so a near miss is not a crash.
 function solidBox(o) {
   if (o.type === "spike") {
     return {
-      x: o.x + 3,
+      x: o.x + 4,
       y: o.y,
-      w: Math.max(4, o.w - 6),
-      h: Math.max(4, o.h - 3)
+      w: Math.max(4, o.w - 8),
+      h: Math.max(4, o.h - 5)
     };
   }
   return {
-    x: o.x + 1,
+    x: o.x + 3,
     y: o.y,
-    w: Math.max(4, o.w - 2),
-    h: Math.max(4, o.h - 1)
+    w: Math.max(4, o.w - 6),
+    h: Math.max(4, o.h - 5)
   };
 }
 
@@ -785,7 +804,7 @@ function resetRun() {
   state.bonus = 0;
   state.bestAtStart = state.best;
   state.jumpBuffer = 0;
-  state.cursor = START_X + 150;
+  state.cursor = START_X + 240;
   state.patternCount = 0;
   state.deadFor = 0;
   state.shake = 0;
