@@ -18,7 +18,8 @@
   to pop a coin out. Your best score stays on this device.
 
   Every picture is drawn with rectangles in this file.
-  Nothing is loaded from an image.
+  Nothing is loaded from an image. The music is made of
+  square and triangle waves in this file too. No samples.
 
   The sizes of pits, pipes, and gaps were checked so a
   full-height jump can always get through. Early in 1-1
@@ -61,6 +62,7 @@ const MIN_GAP = 130;
 
 const BEST_KEY = "cruzio-dash-best";
 const MUTE_KEY = "cruzio-dash-mute";
+const MUSIC_KEY = "cruzio-dash-music";
 const COIN_POINTS = 50;
 const STOMP_POINTS = 100;
 
@@ -594,18 +596,188 @@ let reduceMotion = false;
 
 // ============================================================
 // SOUND
-// Short beeps from the Web Audio oscillator. No audio files.
-// The mute button skips them.
+// Effects are short beeps. Music is a tiny step sequencer
+// on square and triangle waves. No samples, no borrowed tunes.
+// The Sfx button skips effects. The Music button skips the tune.
+// Music is much quieter than a jump or a coin.
 // ============================================================
+
+// One cell is an eighth note.
+// A positive number is a MIDI note. 0 is a rest.
+// -1 holds the note that came before it (no new attack).
+// Loops are original: different keys, rhythms, and moods.
+// They are not quotations of any game theme.
+const TUNES = {
+  meadow: {
+    // Bright and bouncy. Short notes, major key, lots of skips.
+    bpm: 126,
+    gate: 0.42,
+    leadWave: "square",
+    bassWave: "triangle",
+    lead: [
+      72, 76, 79, 76, 74, 77, 81, 77,
+      71, 74, 79, 74, 72, 67, 72, 76,
+      79, 76, 74, 72, 77, 74, 72, 71,
+      69, 72, 76, 72, 67, 64, 67, 72
+    ],
+    bass: [
+      48, 0, 48, 0, 43, 0, 43, 0,
+      41, 0, 41, 0, 43, 0, 47, 0,
+      48, 0, 45, 0, 43, 0, 41, 0,
+      36, 0, 43, 0, 48, 0, 48, 0
+    ]
+  },
+  lagoon: {
+    // Floaty. Slow, held notes, a dorian sway instead of a march.
+    bpm: 92,
+    gate: 0.92,
+    leadWave: "triangle",
+    bassWave: "triangle",
+    lead: [
+      62, -1, -1, -1, 65, -1, 69, -1,
+      72, -1, -1, -1, 70, -1, 67, -1,
+      65, -1, -1, 64, 62, -1, -1, -1,
+      60, -1, 62, -1, 57, -1, -1, -1
+    ],
+    bass: [
+      38, -1, -1, -1, 45, -1, -1, -1,
+      41, -1, -1, -1, 43, -1, -1, -1,
+      38, -1, -1, -1, 36, -1, -1, -1,
+      33, -1, -1, -1, 38, -1, -1, -1
+    ]
+  },
+  canopy: {
+    // Leafy and light. A mixolydian skip, mid tempo.
+    bpm: 116,
+    gate: 0.5,
+    leadWave: "square",
+    bassWave: "triangle",
+    lead: [
+      67, 71, 74, 71, 72, 74, 67, 64,
+      66, 69, 73, 69, 67, 64, 62, 64,
+      67, 71, 74, 76, 74, 71, 69, 67,
+      66, 69, 67, 64, 62, 64, 67, -1
+    ],
+    bass: [
+      43, 0, 47, 0, 43, 0, 38, 0,
+      41, 0, 45, 0, 43, 0, 38, 0,
+      43, 0, 47, 0, 50, 0, 47, 0,
+      45, 0, 43, 0, 38, 0, 43, 0
+    ]
+  },
+  cloudway: {
+    // Airy. High, sparse, long gaps of sky.
+    bpm: 104,
+    gate: 0.7,
+    leadWave: "triangle",
+    bassWave: "triangle",
+    lead: [
+      77, 0, 0, 0, 81, 0, 79, 0,
+      76, 0, 0, 0, 74, 0, 72, 0,
+      0, 0, 79, -1, 77, 0, 0, 0,
+      74, 0, 72, 0, 0, 0, 0, 0
+    ],
+    bass: [
+      41, 0, 0, 0, 0, 0, 48, 0,
+      41, 0, 0, 0, 45, 0, 0, 0,
+      41, 0, 0, 0, 36, 0, 0, 0,
+      41, 0, 0, 0, 0, 0, 0, 0
+    ]
+  },
+  steps: {
+    // A plain march. Staccato quarters, minor key.
+    bpm: 120,
+    gate: 0.34,
+    leadWave: "square",
+    bassWave: "triangle",
+    lead: [
+      69, 0, 72, 0, 76, 0, 72, 0,
+      74, 0, 71, 0, 69, 0, 67, 0,
+      65, 0, 69, 0, 72, 0, 76, 0,
+      74, 0, 72, 0, 69, 0, 69, 0
+    ],
+    bass: [
+      45, 0, 45, 0, 40, 0, 40, 0,
+      38, 0, 38, 0, 43, 0, 43, 0,
+      41, 0, 41, 0, 45, 0, 40, 0,
+      38, 0, 43, 0, 45, 0, 45, 0
+    ]
+  },
+  grove: {
+    // Warm and round. A lilting major tune, not the meadow one.
+    bpm: 108,
+    gate: 0.62,
+    leadWave: "square",
+    bassWave: "triangle",
+    lead: [
+      65, 69, 72, 69, 70, 74, 72, 70,
+      67, 70, 74, 70, 69, 67, 65, 64,
+      65, 69, 72, 76, 74, 72, 70, 69,
+      67, 70, 67, 65, 64, 62, 65, -1
+    ],
+    bass: [
+      41, 0, 41, 0, 48, 0, 46, 0,
+      43, 0, 43, 0, 41, 0, 36, 0,
+      41, 0, 48, 0, 46, 0, 43, 0,
+      41, 0, 36, 0, 41, 0, 41, 0
+    ]
+  },
+  night: {
+    // Spooky. Slow phrygian steps, low and a little uneasy.
+    bpm: 78,
+    gate: 0.85,
+    leadWave: "triangle",
+    bassWave: "triangle",
+    lead: [
+      64, -1, 65, 64, 67, -1, 65, 64,
+      62, -1, 60, 62, 64, -1, -1, -1,
+      71, -1, 69, 67, 65, -1, 64, 65,
+      62, -1, 64, -1, 60, -1, -1, -1
+    ],
+    bass: [
+      40, -1, -1, -1, 41, -1, 40, -1,
+      35, -1, -1, -1, 36, -1, 40, -1,
+      40, -1, -1, -1, 35, -1, -1, -1,
+      36, -1, 41, -1, 40, -1, -1, -1
+    ]
+  }
+};
+
+// A short original phrase for the pennant. Not a rising major arpeggio.
+const FLAG_JINGLE = [67, 69, 72, 76, -1, 74, 71, 67, -1];
+
+let musicOn = true;
+let musicGain = null;
+let musicTimer = null;
+let musicNodes = [];
+let musicScene = "";
+let musicMode = "";
+let musicLeadStep = 0;
+let musicBassStep = 0;
+let musicLeadTime = 0;
+let musicBassTime = 0;
 
 function loadMute() {
   try { return localStorage.getItem(MUTE_KEY) === "1"; }
   catch (err) { return false; }
 }
 
+function loadMusic() {
+  try { return localStorage.getItem(MUSIC_KEY) !== "0"; }
+  catch (err) { return true; }
+}
+
 function paintMute() {
   const btn = document.getElementById("mute");
   if (btn) btn.textContent = muted ? "Off" : "Sfx";
+}
+
+function paintMusic() {
+  const btn = document.getElementById("music");
+  if (!btn) return;
+  btn.textContent = musicOn ? "Music" : "Off";
+  btn.setAttribute("aria-pressed", musicOn ? "true" : "false");
+  btn.setAttribute("aria-label", musicOn ? "Turn music off" : "Turn music on");
 }
 
 function toggleMute() {
@@ -615,8 +787,18 @@ function toggleMute() {
   catch (err) { /* private mode */ }
 }
 
+function toggleMusic() {
+  // The click is a user gesture, so Safari will allow sound after this.
+  unlockAudio();
+  musicOn = !musicOn;
+  paintMusic();
+  try { localStorage.setItem(MUSIC_KEY, musicOn ? "1" : "0"); }
+  catch (err) { /* private mode */ }
+  if (!musicOn) stopMusic();
+  else startTune(sceneDef().id, true);
+}
+
 function unlockAudio() {
-  if (muted) return;
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -652,6 +834,151 @@ function fanfare() {
   }
 }
 
+// Effects sit around 0.03 to 0.05. The tune is held under that.
+function musicBus() {
+  if (!audioCtx) return null;
+  if (!musicGain) {
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.18;
+    musicGain.connect(audioCtx.destination);
+  }
+  return musicGain;
+}
+
+function midiFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+// Later loops push the tempo up a little. It caps so it stays musical.
+function eighthSeconds(bpm) {
+  const eighth = 60 / bpm / 2;
+  const loop = Math.max(0, worldNumber() - 1);
+  const faster = 1 + Math.min(4, loop) * 0.07;
+  return eighth / faster;
+}
+
+function scheduleNote(midi, when, dur, wave) {
+  if (!audioCtx || midi <= 0 || dur <= 0) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const peak = 0.055;
+    osc.type = wave || "square";
+    osc.frequency.setValueAtTime(midiFreq(midi), when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(peak, when + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(0.04, dur));
+    osc.connect(gain);
+    gain.connect(musicBus());
+    osc.start(when);
+    osc.stop(when + dur + 0.03);
+    musicNodes.push(osc);
+    if (musicNodes.length > 24) musicNodes.splice(0, musicNodes.length - 16);
+  } catch (err) { /* ignore */ }
+}
+
+function stopVoices() {
+  for (let i = 0; i < musicNodes.length; i++) {
+    try { musicNodes[i].stop(); }
+    catch (err) { /* already stopped */ }
+  }
+  musicNodes = [];
+}
+
+function stopMusic() {
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+  musicMode = "";
+  musicScene = "";
+  stopVoices();
+}
+
+function pumpVoice(row, wave, gate, which) {
+  const step = eighthSeconds(TUNES[musicScene].bpm);
+  const horizon = audioCtx.currentTime + 0.24;
+  let t = which === "lead" ? musicLeadTime : musicBassTime;
+  let i = which === "lead" ? musicLeadStep : musicBassStep;
+  const len = row.length;
+  let guard = 0;
+  while (t < horizon && guard < 32) {
+    guard += 1;
+    const cell = row[i];
+    if (cell > 0) {
+      let span = 1;
+      while (span < len && row[(i + span) % len] === -1) span += 1;
+      scheduleNote(cell, t, step * span * gate, wave);
+    }
+    t += step;
+    i = (i + 1) % len;
+  }
+  if (which === "lead") {
+    musicLeadTime = t;
+    musicLeadStep = i;
+  } else {
+    musicBassTime = t;
+    musicBassStep = i;
+  }
+}
+
+function pumpMusic() {
+  if (!musicOn || !audioCtx || document.hidden || musicMode !== "tune") return;
+  const tune = TUNES[musicScene];
+  if (!tune) return;
+  pumpVoice(tune.lead, tune.leadWave, tune.gate, "lead");
+  pumpVoice(tune.bass, tune.bassWave, tune.gate, "bass");
+}
+
+function startTune(id, force) {
+  if (!musicOn || !audioCtx || document.hidden) return;
+  if (!TUNES[id]) return;
+  if (!force && musicScene === id && musicTimer && musicMode === "tune") return;
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+  stopVoices();
+  musicMode = "tune";
+  musicScene = id;
+  musicLeadStep = 0;
+  musicBassStep = 0;
+  const now = audioCtx.currentTime + 0.04;
+  musicLeadTime = now;
+  musicBassTime = now;
+  pumpMusic();
+  musicTimer = setInterval(pumpMusic, 90);
+}
+
+function playFlagJingle() {
+  if (!musicOn || !audioCtx || document.hidden) return;
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+  stopVoices();
+  musicMode = "jingle";
+  musicScene = "";
+  // Fixed tempo so the phrase finishes before the next stage starts.
+  const step = 60 / 168 / 2;
+  let t = audioCtx.currentTime + 0.02;
+  for (let i = 0; i < FLAG_JINGLE.length; i++) {
+    const cell = FLAG_JINGLE[i];
+    if (cell > 0) {
+      let span = 1;
+      while (i + span < FLAG_JINGLE.length && FLAG_JINGLE[i + span] === -1) span += 1;
+      scheduleNote(cell, t, step * span * 0.7, i % 2 === 0 ? "square" : "triangle");
+    }
+    t += step;
+  }
+}
+
+function ensureMusic() {
+  if (!musicOn || !audioCtx || document.hidden) return;
+  if (state.mode === "clear" || musicMode === "jingle") return;
+  startTune(sceneDef().id, false);
+}
+
 // ============================================================
 // INPUT
 // holding stays true until the finger, mouse, or key comes up.
@@ -659,27 +986,33 @@ function fanfare() {
 // ============================================================
 
 function isUi(target) {
-  return target && target.closest && (target.closest("#home") || target.closest("#mute"));
+  return target && target.closest && (
+    target.closest("#home") || target.closest("#mute") || target.closest("#music") || target.closest("#soundbar")
+  );
 }
 
 function onPress() {
+  // First tap creates the audio context. Safari will not start it sooner.
   unlockAudio();
   if (state.mode === "title") {
     resetRun();
     state.mode = "play";
     holding = false;
     tone(520, 0.06, "square", 0.03);
+    ensureMusic();
     return;
   }
   if (state.mode === "dead") {
     if (state.deadFor > 0.35) {
       resetRun();
       state.mode = "play";
+      ensureMusic();
     }
     holding = false;
     return;
   }
   if (state.mode !== "play") return;
+  ensureMusic();
   state.jumpBuffer = 0.12;
   holding = true;
 }
@@ -693,7 +1026,7 @@ function bindInput() {
     if (e.repeat) return;
     const jumpKey = e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW";
     if (!jumpKey) return;
-    if (e.target && (e.target.id === "home" || e.target.id === "mute")) return;
+    if (e.target && (e.target.id === "home" || e.target.id === "mute" || e.target.id === "music")) return;
     e.preventDefault();
     onPress();
   });
@@ -714,6 +1047,15 @@ function bindInput() {
       e.preventDefault();
       e.stopPropagation();
       toggleMute();
+    });
+  }
+  const musicBtn = document.getElementById("music");
+  if (musicBtn) {
+    musicBtn.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    musicBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMusic();
     });
   }
   document.addEventListener("touchstart", function (e) {
@@ -1139,7 +1481,10 @@ function beginClear() {
   noteScore();
   state.mode = "clear";
   state.clearFor = 0;
-  fanfare();
+  // The tune steps aside for a short pennant phrase.
+  // If music is off, the old beep fanfare still marks the clear.
+  if (musicOn && audioCtx) playFlagJingle();
+  else fanfare();
 }
 
 function advanceScene() {
@@ -1156,6 +1501,7 @@ function advanceScene() {
   player.onGround = true;
   obstacles.length = 0;
   spawnAhead();
+  startTune(sceneDef().id, true);
 }
 
 function moveActors(dt) {
@@ -2110,9 +2456,9 @@ function resize() {
   buffer.height = viewH;
   const slide = "translate(" + Math.round(box.x) + "px," + Math.round(box.y) + "px)";
   const home = document.getElementById("home");
-  const muteBtn = document.getElementById("mute");
+  const soundbar = document.getElementById("soundbar");
   if (home) home.style.transform = slide;
-  if (muteBtn) muteBtn.style.transform = slide;
+  if (soundbar) soundbar.style.transform = slide;
   if (state.mode === "play") {
     cameraX = player.x - viewW * FOCUS;
     spawnAhead();
@@ -2139,7 +2485,9 @@ function boot() {
   ctx = buffer.getContext("2d");
   reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   muted = loadMute();
+  musicOn = loadMusic();
   paintMute();
+  paintMusic();
   try { state.best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; }
   catch (err) { state.best = 0; }
   state.bestAtStart = state.best;
@@ -2156,7 +2504,18 @@ function boot() {
   }
   document.addEventListener("visibilitychange", function () {
     lastTime = 0;
-    if (document.hidden) noteScore();
+    if (document.hidden) {
+      noteScore();
+      // Drop scheduled notes so they do not burst when the tab returns.
+      if (musicTimer) {
+        clearInterval(musicTimer);
+        musicTimer = null;
+      }
+      stopVoices();
+      musicMode = "";
+      return;
+    }
+    if (musicOn && audioCtx && state.mode === "play") startTune(sceneDef().id, true);
   });
   requestAnimationFrame(tick);
 }
