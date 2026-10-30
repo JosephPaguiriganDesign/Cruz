@@ -11,6 +11,12 @@
   Reach the pennant pole to finish a stage. A gate appears,
   then the next place starts. The counter reads 1-1, 1-2,
   up through 1-7, then 2-1, and so on.
+  You start with three lives. A fall sends you back to the
+  start of that stage and keeps your score. The last life
+  ends the run, and the next one begins at 1-1.
+
+  On land, tap for a hop and hold for a high jump.
+  In the lagoon, each tap is a swim stroke.
   Later stages, and the far end of each stage, pack the
   road tighter: shorter gaps, more obstacles at once.
 
@@ -41,6 +47,17 @@ const GRAVITY_HOLD = 1250;
 const GRAVITY_FALL = 2400;
 const HOP_CUT = 0.4;
 
+// Lagoon swimming. A tap is one stroke, not a jump.
+// Gravity is light, so he sinks slowly. Rise and fall are both capped,
+// and drag bleeds speed the way water does.
+const SWIM_GRAV = 210;
+const SWIM_STROKE = 86;
+const SWIM_HOLD_STROKE = 62;
+const SWIM_RISE_MAX = 120;
+const SWIM_FALL_MAX = -58;
+const SWIM_DRAG = 0.55;
+const SWIM_HOLD_EVERY = 0.32;
+
 // How fast the course moves, in pixels per second.
 // Each new stage adds SPEED_STEP. Inside a stage it also creeps up.
 const SPEED_START = 74;
@@ -65,12 +82,13 @@ const MUTE_KEY = "cruzio-dash-mute";
 const MUSIC_KEY = "cruzio-dash-music";
 const COIN_POINTS = 50;
 const STOMP_POINTS = 100;
+const LIVES_START = 3;
 
 // ============================================================
 // STAGES
 // Each stage is its own scene: colors, ground, and obstacles.
 // "kinds" is the list of pieces the stage is allowed to build.
-// grav is 1 on land. The lagoon uses a smaller grav so jumps float.
+// grav is 1 on land. The lagoon ignores these and uses swim strokes.
 // ============================================================
 
 const SCENES = [
@@ -129,10 +147,12 @@ const SCENES = [
     pipeDark: "#1a5a50",
     accent: "#ff7a8a",
     ink: "#062028",
-    gentle: ["coins", "coral", "weed"],
-    mid: ["fish", "fishHigh", "qblock", "pit"],
-    hard: ["school", "coinPit", "mover", "patrol"],
-    later: ["schoolWide", "popper"]
+    swim: true,
+    // No pits. The sand is safe. You swim through coral gaps and fish.
+    gentle: ["coinDrift", "coralLow"],
+    mid: ["coralMid", "fish", "fishHigh", "coinGate"],
+    hard: ["coralHigh", "school", "coralShift"],
+    later: ["schoolWide", "coralWeave"]
   },
   {
     id: "canopy",
@@ -405,6 +425,40 @@ const SPRITE = {
     "..OORRRROOO.....",
     "..OOOBBOOO......",
     "..NNWW..WWNN...."
+  ],
+  // Glide. Arms reach forward, legs trail.
+  swimA: [
+    "......RRRRRR....",
+    ".....RRRRRRRR...",
+    ".....RRWWWRDD...",
+    "....RSSSSSSDD...",
+    "....RSSEWSSDD...",
+    "....RSSSSSSS....",
+    "....RSKKKKSS....",
+    ".....SSSSS......",
+    "...RRRRROOO.....",
+    "..WWWRRROOO.....",
+    ".....BBOOO......",
+    "....OO...OO.....",
+    "...NN.....NN....",
+    "..WW.......WW..."
+  ],
+  // Stroke. Arms pull back and the legs kick.
+  swimB: [
+    "......RRRRRR....",
+    ".....RRRRRRRR...",
+    ".....RRWWWRDD...",
+    "....RSSSSSSDD...",
+    "....RSSEWSSDD...",
+    "....RSSSSSSS....",
+    "....RSKKKKSS....",
+    ".....SSSSS......",
+    "..RRRRRROOO.....",
+    ".WW.RRRROOO.....",
+    "....BBOOOO......",
+    "...OO...OO......",
+    "..NN.....NN.....",
+    ".WW.......WW...."
   ]
 };
 
@@ -578,7 +632,11 @@ const state = {
   bannerT: 0,
   hasJumped: false,
   clock: 0,
-  paused: false
+  paused: false,
+  strokeT: 0,
+  holdStroke: 0,
+  swimHint: 0,
+  lives: LIVES_START
 };
 
 let holding = false;
@@ -1003,11 +1061,7 @@ function onPress() {
     return;
   }
   if (state.mode === "dead") {
-    if (state.deadFor > 0.35) {
-      resetRun();
-      state.mode = "play";
-      ensureMusic();
-    }
+    if (state.deadFor > 0.35) continueAfterDeath();
     holding = false;
     return;
   }
@@ -1096,6 +1150,26 @@ function addStairs(x, steps) {
     addObj({ type: "block", x: x + i * TILE, y: 0, w: TILE, h: level * TILE });
   }
   return cols * TILE;
+}
+
+// A coral gate. The opening is gapH tall, starting bottomH above the sand.
+// The sand itself is never a pit. Swim through the opening.
+function addCoralGate(x, bottomH, gapH) {
+  const w = 16;
+  if (bottomH > 0) addObj({ type: "coral", x: x, y: 0, w: w, h: bottomH });
+  addObj({ type: "coral", x: x, y: bottomH + gapH, w: w, h: 150, hang: true });
+  return w;
+}
+
+function addSwimSchool(x, wide) {
+  // Fish sit on different depths, far enough apart to change depth between them.
+  addCritter("fish", x, 6, -16, 8);
+  addCritter("fish", x + 78, 42, -14, 8);
+  addCritter("fish", x + 156, 18, -16, 8);
+  if (!wide) return 188;
+  addCritter("fish", x + 250, 50, -14, 8);
+  addCritter("fish", x + 328, 10, -16, 8);
+  return 360;
 }
 
 function addFlyerCluster(type, x, yLift) {
@@ -1248,22 +1322,49 @@ function makePattern(kind, x) {
     addObj({ type: "deco", x: x, y: 12, w: 14, h: 16, deco: "coral" });
     return 14;
   }
+  if (kind === "coinDrift") {
+    const depths = [20, 34, 26, 42, 30];
+    for (let i = 0; i < depths.length; i++) {
+      addObj({ type: "coin", x: x + i * 16, y: depths[i], w: 10, h: 10 });
+    }
+    return 80;
+  }
+  if (kind === "coralLow") return addCoralGate(x, 0, 58);
+  if (kind === "coralMid") return addCoralGate(x, 14, 48);
+  if (kind === "coralHigh") return addCoralGate(x, 26, 42);
+  if (kind === "coinGate") {
+    const w = addCoralGate(x, 0, 48);
+    addObj({ type: "coin", x: x + 3, y: 16, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 3, y: 30, w: 10, h: 10 });
+    return w;
+  }
+  if (kind === "coralShift") {
+    const w1 = addCoralGate(x, 0, 56);
+    const gap = 140;
+    const w2 = addCoralGate(x + w1 + gap, 24, 42);
+    return w1 + gap + w2;
+  }
+  if (kind === "coralWeave") {
+    const a = addCoralGate(x, 0, 56);
+    const gap = 136;
+    const b = addCoralGate(x + a + gap, 24, 42);
+    const c = addCoralGate(x + a + gap + b + gap, 10, 50);
+    return a + gap + b + gap + c;
+  }
   if (kind === "weed") {
     addObj({ type: "block", x: x, y: 28, w: 36, h: 10, float: true });
     return 36;
   }
   if (kind === "fish") {
-    addCritter("fish", x + 10, 0, -22, 18);
-    return 48;
+    addCritter("fish", x + 8, 8, -18, 10);
+    return 46;
   }
   if (kind === "fishHigh") {
-    addCritter("fish", x + 8, 40, -18, 14);
-    return 44;
+    addCritter("fish", x + 8, 46, -16, 10);
+    return 46;
   }
   if (kind === "school" || kind === "schoolWide") {
-    let w = addFlyerCluster("fish", x, 0);
-    if (kind === "schoolWide") w += 150 + addFlyerCluster("fish", x + w + 150, 4);
-    return w + 16;
+    return addSwimSchool(x, kind === "schoolWide");
   }
   if (kind === "glider") {
     addCritter("glider", x + 10, 0, -20, 18);
@@ -1388,6 +1489,15 @@ function sceneGrav() {
   return { hold: GRAVITY_HOLD * sc.grav, fall: GRAVITY_FALL * sc.grav, jump: JUMP_V * sc.jump };
 }
 
+function inWater() {
+  return !!sceneDef().swim;
+}
+
+// Highest the feet may go. The head stays under the surface, below the score.
+function waterTop() {
+  return Math.max(78, horizon() - SPRITE_H - 18);
+}
+
 function boxAt(px, py) {
   return { x: px - PLAYER_W / 2, y: py, w: PLAYER_W, h: PLAYER_H };
 }
@@ -1447,7 +1557,9 @@ function grantCoin(x, y) {
 }
 
 function noteScore() {
-  state.score = Math.floor(Math.max(0, player.x - START_X) / 8) + state.bonus;
+  const next = Math.floor(Math.max(0, player.x - START_X) / 8) + state.bonus;
+  // A respawn rewinds Cruzio, but the score he already earned stays.
+  if (next > state.score) state.score = next;
   if (state.score > state.best) {
     state.best = state.score;
     try { localStorage.setItem(BEST_KEY, String(state.best)); }
@@ -1458,6 +1570,7 @@ function noteScore() {
 function die() {
   if (state.mode !== "play") return;
   noteScore();
+  state.lives = Math.max(0, state.lives - 1);
   state.mode = "dead";
   state.deadFor = 0;
   state.shake = 1;
@@ -1501,6 +1614,8 @@ function advanceScene() {
   player.onGround = true;
   obstacles.length = 0;
   spawnAhead();
+  state.swimHint = inWater() ? 3.2 : 0;
+  state.strokeT = 0;
   startTune(sceneDef().id, true);
 }
 
@@ -1616,7 +1731,9 @@ function touchHazards() {
       const top = o.y + o.h;
       if (player.prevY >= top - 3 && player.y <= top + 7 && overlapX(player.x, o)) {
         o.dead = true;
-        player.vy = 250;
+        // In the water a stomp is just another stroke, not a launch.
+        player.vy = inWater() ? SWIM_STROKE : 250;
+        if (inWater() && player.vy > SWIM_RISE_MAX) player.vy = SWIM_RISE_MAX;
         player.y = top;
         state.bonus += STOMP_POINTS;
         puffAt(o.x + 4, top, "#f0d060");
@@ -1624,7 +1741,7 @@ function touchHazards() {
         continue;
       }
     }
-    if (o.type === "spike" || enemy || (o.type === "snap" && o.out)) {
+    if (o.type === "spike" || o.type === "coral" || enemy || (o.type === "snap" && o.out)) {
       if (hit(box, hazardBox(o))) { die(); return; }
     }
     if (o.type === "coin" && hit(box, o)) {
@@ -1638,7 +1755,101 @@ function touchHazards() {
   }
 }
 
+function strokeBubbles() {
+  for (let i = 0; i < 4; i++) {
+    particles.push({
+      x: player.x - 2,
+      y: player.y + 6,
+      vx: -16 - Math.random() * 24,
+      vy: 16 + Math.random() * 28,
+      life: 0.7,
+      max: 0.7,
+      color: "rgba(220,255,250,0.95)",
+      s: 2,
+      bubble: true
+    });
+  }
+}
+
+function swimStroke(power) {
+  player.vy += power;
+  if (player.vy > SWIM_RISE_MAX) player.vy = SWIM_RISE_MAX;
+  player.onGround = false;
+  state.hasJumped = true;
+  state.strokeT = 0.22;
+  state.swimHint = 0;
+  strokeBubbles();
+  tone(380, 0.05, "sine", 0.025);
+}
+
+function updateSwim(dt) {
+  if (state.strokeT > 0) state.strokeT = Math.max(0, state.strokeT - dt);
+
+  // A tap is one stroke, even in the middle of the water.
+  if (state.jumpBuffer > 0) {
+    state.jumpBuffer = 0;
+    swimStroke(SWIM_STROKE);
+    state.holdStroke = SWIM_HOLD_EVERY;
+  } else if (holding) {
+    // Holding keeps a slower stroke going, so a long press still rises.
+    state.holdStroke -= dt;
+    if (state.holdStroke <= 0) {
+      swimStroke(SWIM_HOLD_STROKE);
+      state.holdStroke = SWIM_HOLD_EVERY;
+    }
+  } else {
+    state.holdStroke = SWIM_HOLD_EVERY;
+  }
+
+  player.prevY = player.y;
+  player.x += runSpeed() * dt;
+  if (state.mode !== "play") return;
+
+  player.vy -= SWIM_GRAV * dt;
+  player.vy -= player.vy * SWIM_DRAG * dt;
+  if (player.vy > SWIM_RISE_MAX) player.vy = SWIM_RISE_MAX;
+  if (player.vy < SWIM_FALL_MAX) player.vy = SWIM_FALL_MAX;
+  player.y += player.vy * dt;
+
+  const cap = waterTop();
+  if (player.y > cap) {
+    player.y = cap;
+    if (player.vy > 0) player.vy = 0;
+  }
+  // The sand is safe. Resting on it does not hurt.
+  if (player.y <= 0) {
+    player.y = 0;
+    if (player.vy < 0) player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+
+  if (state.mode !== "play") return;
+  touchHazards();
+  if (state.mode !== "play") return;
+
+  if (Math.random() < 0.05) {
+    particles.push({
+      x: cameraX + Math.random() * viewW,
+      y: 8 + Math.random() * 30,
+      vx: 6,
+      vy: 18 + Math.random() * 16,
+      life: 1.3,
+      max: 1.3,
+      color: "rgba(220,255,250,0.85)",
+      s: 2,
+      bubble: true
+    });
+  }
+  noteScore();
+}
+
 function updatePlay(dt) {
+  if (inWater()) {
+    updateSwim(dt);
+    return;
+  }
   const g = sceneGrav();
 
   // Letting go mid-rise turns a high jump into a short hop.
@@ -1729,10 +1940,13 @@ function update(dt) {
   }
 
   if (state.bannerT > 0) state.bannerT -= dt;
+  if (state.swimHint > 0) state.swimHint -= dt;
 
   if (state.mode === "dead") {
     state.deadFor += dt;
     if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 2.2);
+    // Lives left: hop back to the start of this stage on their own.
+    if (state.lives > 0 && state.deadFor > 1.2) continueAfterDeath();
     return;
   }
   if (state.mode === "clear") {
@@ -1778,11 +1992,55 @@ function resetRun() {
   state.stepAcc = 0;
   state.clock = 0;
   state.paused = false;
+  state.strokeT = 0;
+  state.holdStroke = 0;
+  state.swimHint = 0;
+  state.lives = LIVES_START;
   state.bestAtStart = state.best;
   obstacles.length = 0;
   particles.length = 0;
   cameraX = player.x - viewW * FOCUS;
   spawnAhead();
+}
+
+// Back to the start of this stage. Same level, same speed, score kept.
+function respawnLevel() {
+  const start = state.levelStartX;
+  player.x = start;
+  player.y = 0;
+  player.prevY = 0;
+  player.vy = 0;
+  player.onGround = true;
+  player.wasHolding = false;
+  holding = false;
+  state.goalSpawned = false;
+  state.patternCount = 0;
+  state.cursor = start + 180;
+  state.jumpBuffer = 0;
+  state.deadFor = 0;
+  state.clearFor = 0;
+  state.shake = 0;
+  state.bannerT = 2.2;
+  state.stepAcc = 0;
+  state.strokeT = 0;
+  state.holdStroke = SWIM_HOLD_EVERY;
+  state.swimHint = inWater() ? 2.6 : 0;
+  state.mode = "play";
+  obstacles.length = 0;
+  particles.length = 0;
+  cameraX = player.x - viewW * FOCUS;
+  spawnAhead();
+}
+
+function continueAfterDeath() {
+  if (state.mode !== "dead") return;
+  if (state.lives > 0) {
+    respawnLevel();
+    return;
+  }
+  resetRun();
+  state.mode = "play";
+  ensureMusic();
 }
 
 // ============================================================
@@ -1912,6 +2170,12 @@ function drawBackdrop(cam) {
     // Soft bands so the water reads as water.
     ctx.fillStyle = "rgba(255,255,255,0.05)";
     for (let y = 20; y < gy; y += 14) ctx.fillRect(0, y, viewW, 2);
+    // The pale line is the surface. Strokes stop there.
+    const surface = worldY(waterTop() + SPRITE_H);
+    ctx.fillStyle = "rgba(230,255,252,0.45)";
+    ctx.fillRect(0, surface, viewW, 2);
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.fillRect(0, surface + 2, viewW, 2);
   }
 
   if (sc.id === "lagoon") {
@@ -2209,6 +2473,7 @@ function drawObstacles(cam) {
     else if (o.type === "coin") drawCoin(o, x);
     else if (o.type === "pole") drawPole(o, x);
     else if (o.type === "deco") drawDeco(o, x);
+    else if (o.type === "coral") drawCoral(o, x);
     else if (o.type === "snap") drawSnap(o, x);
     else if (o.type === "bug" || o.type === "fish" || o.type === "glider") {
       const art = o.type === "bug" ? BUG_SPRITE : o.type === "fish" ? FISH_SPRITE : GLIDER_SPRITE;
@@ -2222,8 +2487,40 @@ function drawObstacles(cam) {
   }
 }
 
+function drawCoral(o, x) {
+  const sc = sceneDef();
+  const top = worldY((o.y || 0) + o.h);
+  const base = worldY(o.y || 0);
+  const h = Math.max(1, base - top);
+  ctx.fillStyle = sc.hill;
+  ctx.fillRect(x + 4, top, o.w - 8, h);
+  ctx.fillStyle = sc.pipeLite;
+  ctx.fillRect(x + 5, top, 3, h);
+  ctx.fillStyle = sc.accent;
+  const bands = Math.max(1, Math.floor(h / 14));
+  for (let i = 0; i < bands; i++) {
+    const by = top + 6 + i * 14;
+    ctx.fillRect(x + 1, by, o.w - 2, 3);
+    ctx.fillRect(x + 1, by - 4, 3, 4);
+    ctx.fillRect(x + o.w - 4, by + 3, 3, 4);
+  }
+  if (o.hang) {
+    ctx.fillRect(x + 3, base - 8, 3, 8);
+    ctx.fillRect(x + o.w - 6, base - 11, 3, 11);
+  } else {
+    ctx.fillRect(x + 3, top, 3, 8);
+    ctx.fillRect(x + o.w - 6, top, 3, 10);
+  }
+  drawDangerBox(x, top, o.w, h, "all");
+}
+
 function drawHero(cam) {
-  const rows = !player.onGround ? SPRITE.jump : (Math.floor(player.x / 10) % 2 === 0 ? SPRITE.runA : SPRITE.runB);
+  let rows;
+  if (inWater() && state.mode !== "title") {
+    rows = (state.strokeT || 0) > 0.06 ? SPRITE.swimB : (Math.floor((state.clock || 0) * 5) % 2 === 0 ? SPRITE.swimA : SPRITE.swimB);
+  } else {
+    rows = !player.onGround ? SPRITE.jump : (Math.floor(player.x / 10) % 2 === 0 ? SPRITE.runA : SPRITE.runB);
+  }
   const destX = Math.round(player.x - cam - rows[0].length / 2);
   const destY = Math.round(worldY(player.y) - rows.length);
   if (state.mode === "dead" && Math.floor(state.deadFor * 12) % 2 === 0) return;
@@ -2272,12 +2569,35 @@ function drawHud() {
   drawLabel(score, viewW - 8 - textWidth(score, scale), y, scale);
   drawLabel(best, viewW - 8 - textWidth(best, scale), y + scale * 5 + 4, scale);
   drawLabel(coin, 8, y, scale);
+  drawLives(8, y + scale * 5 + 4);
   const stageW = textWidth(stage, scale);
   drawLabel(stage, Math.round((viewW - stageW) / 2), y, scale);
-  if (state.mode === "play" && !state.hasJumped) {
+  if (state.mode === "play" && inWater() && state.swimHint > 0) {
+    const hint = "TAP TO SWIM";
+    const hintScale = textWidth(hint, 2) < viewW - 24 ? 2 : 1;
+    const hintY = hudTop() + (scale * 5 + 4) * 2 + 6 + scale * 5 + 10;
+    drawLabel(hint, Math.round((viewW - textWidth(hint, hintScale)) / 2), hintY, hintScale);
+  } else if (state.mode === "play" && !state.hasJumped) {
     const hint = "HOLD TO JUMP";
     drawLabel(hint, Math.round((viewW - textWidth(hint, 2)) / 2), horizon() - 64, 2);
   }
+}
+
+function drawHeart(x, y, s, filled) {
+  const rows = ["RR.RR", "RRRRR", ".RRR.", "..R.."];
+  ctx.fillStyle = filled ? "#e23b3b" : "rgba(226,59,59,0.28)";
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < 5; c++) {
+      if (rows[r][c] !== "R") continue;
+      ctx.fillRect(x + c * s, y + r * s, s, s);
+    }
+  }
+}
+
+function drawLives(x, y) {
+  const s = viewW < 200 ? 1 : 2;
+  const step = 5 * s + (s === 1 ? 2 : 3);
+  for (let i = 0; i < LIVES_START; i++) drawHeart(x + i * step, y, s, i < state.lives);
 }
 
 function drawPanel(x, y, w, h) {
@@ -2358,12 +2678,22 @@ function drawOverlay() {
   if (state.mode === "dead") {
     ctx.fillStyle = "rgba(20, 32, 51, 0.45)";
     ctx.fillRect(0, 0, viewW, viewH);
+    const small = viewW < 240 ? 1 : 2;
+    const big = viewW < 240 ? 2 : 3;
+    if (state.lives > 0) {
+      drawMessage([
+        { text: state.lives + " LEFT", scale: big },
+        { text: stageLabel(), scale: small },
+        { text: "TAP TO GO", scale: small }
+      ]);
+      return;
+    }
     const record = state.score > state.bestAtStart;
     drawMessage([
-      { text: "GAME OVER", scale: 2 },
-      { text: "SCORE " + state.score, scale: 2 },
-      { text: record ? "NEW BEST" : "BEST " + state.best, scale: 2 },
-      { text: "TAP TO RETRY", scale: 2 }
+      { text: "GAME OVER", scale: small },
+      { text: "SCORE " + state.score, scale: small },
+      { text: record ? "NEW BEST" : "BEST " + state.best, scale: small },
+      { text: "TAP TO RETRY", scale: small }
     ]);
     return;
   }
@@ -2536,9 +2866,12 @@ const api = {
   obstacles: obstacles,
   makePattern: makePattern,
   resetRun: resetRun,
+  respawnLevel: respawnLevel,
+  continueAfterDeath: continueAfterDeath,
   update: update,
   spawnAhead: spawnAhead,
   runSpeed: runSpeed,
+  waterTop: waterTop,
   sceneDef: sceneDef,
   stageLabel: stageLabel,
   stageHeat: stageHeat,
@@ -2569,6 +2902,7 @@ function previewStage(sceneIndex, along) {
   state.cursor = START_X + 24;
   state.bannerT = 3.2;
   state.hasJumped = true;
+  state.lives = LIVES_START;
   state.clock = 0.4;
   state.jumpBuffer = 0;
   player.x = START_X;
