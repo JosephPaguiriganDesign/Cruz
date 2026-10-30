@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<!--
+  viewport-fit=cover uses the full phone screen.
+  maximum-scale=1 and user-scalable=no stop pinch and double-tap zoom.
+  The same rules live in style.css (touch-action, user-select) as a backup,
+  because some phones ignore the scale lock.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="description" content="Cruzio Dash — a tiny 8-bit runner. Tap to jump." />
+<meta name="theme-color" content="#6ec6ff" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Cruzio Dash</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game" width="320" height="180" aria-label="Cruzio Dash. Tap, click, or press space to jump."></canvas>
+<a id="home" href="../">Home</a>
+<script src="game.js"></script>
+</body>
+</html>
