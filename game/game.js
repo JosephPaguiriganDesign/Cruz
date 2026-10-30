@@ -1,19 +1,25 @@
 /*
   CRUZIO DASH
   ------------
-  A small auto-runner, written so you can read it top to bottom.
+  Cruzio runs to the right on his own.
 
-  Cruzio runs to the right by himself.
-  Tap, click, or press Space to jump.
-  Spikes, green pipes, and brick blocks are dangerous.
-  Gold "?" blocks are safe — jump into them for bonus points.
-  The score is how far you get, plus bonuses.
-  Your best score is saved in this browser (localStorage).
+  Tap (or press Space) for a short hop.
+  Hold the button, the mouse, or the key for a higher jump.
+  Let go early and the hop stays small.
+
+  There are seven places. Each one looks different.
+  Reach the pennant pole to finish a stage. A gate appears,
+  then the next place starts a little faster.
+  After the last place, they repeat, faster each lap.
+
+  Coins add to your score. Bump a "?" block from underneath
+  to pop a coin out. Your best score stays on this device.
 
   Every picture is drawn with rectangles in this file.
   Nothing is loaded from an image.
 
-  Try changing the numbers in the TUNING section, then refresh.
+  The sizes of pits, pipes, and gaps were checked so a
+  full-height jump can always get through.
 */
 
 "use strict";
@@ -22,86 +28,242 @@
 // TUNING
 // ============================================================
 
-// Jump height is about (JUMP_V * JUMP_V) / (2 * GRAVITY).
-// 680 and 2000 gives a jump of ~116 pixels that stays up for
-// about 0.7 seconds. That window is wide enough to clear every
-// pipe, spike row, and brick the course can place.
-const GRAVITY = 2000;
-const JUMP_V = 680;
+// A held jump uses the small gravity while Cruzio is going up,
+// so he goes higher. Letting go switches to the big gravity
+// and chops the upward speed, which makes a short hop.
+// Full height is about (JUMP_V * JUMP_V) / (2 * GRAVITY_HOLD).
+const JUMP_V = 500;
+const GRAVITY_HOLD = 1250;
+const GRAVITY_FALL = 2400;
+const HOP_CUT = 0.4;
 
-// How fast the course scrolls, in pixels per second.
-// It stays gentle for a while, then creeps up.
-const SPEED_START = 84;
-const SPEED_MAX = 130;
+// How fast the course moves, in pixels per second.
+// Each new stage adds SPEED_STEP. Inside a stage it also creeps up.
+const SPEED_START = 74;
+const SPEED_STEP = 7;
+const SPEED_RAMP = 18;
+const SPEED_MAX = 150;
 
-// The hitbox is smaller than the drawing, so brushing an edge
-// still counts as a miss. That feels fair on a phone.
 const PLAYER_W = 8;
 const PLAYER_H = 12;
 
-// Where Cruzio sits on screen: 0 is the left edge, 1 is the right.
+// A one-block step can be run up. Taller than this is a wall.
+const STEP_UP = 18;
+const TILE = 16;
+
 const FOCUS = 0.28;
-
-// World x where each run begins.
 const START_X = 48;
-
-// A low brick hangs this many pixels above the ground.
-// Standing Cruzio fits under it. Jumping into it is a crash,
-// so those only show up after the opening.
-const LOW_BRICK_Y = 26;
+const LEVEL_LEN = 1450;
+const MIN_GAP = 130;
 
 const BEST_KEY = "cruzio-dash-best";
+const MUTE_KEY = "cruzio-dash-mute";
+const COIN_POINTS = 50;
+const STOMP_POINTS = 100;
 
 // ============================================================
-// PALETTE
-// All of the colors live here. Change one and the whole game updates.
+// STAGES
+// Each stage is its own scene: colors, ground, and obstacles.
+// "kinds" is the list of pieces the stage is allowed to build.
+// grav is 1 on land. The lagoon uses a smaller grav so jumps float.
 // ============================================================
 
-const PAL = {
-  sky: "#6ec6ff",
-  cloud: "#f7fcff",
-  cloudShade: "#d7ecf8",
-  hillFar: "#8ed487",
-  hillFarShade: "#5eaf62",
-  hillNear: "#3aaa4a",
-  hillNearShade: "#1f7a32",
-  grass: "#5ec63a",
-  grassDark: "#2f8f22",
-  dirt: "#c4844a",
-  dirtDark: "#8d552c",
-  dirtDeep: "#6b3e22",
-  dirtLite: "#d7a15e",
-  brick: "#d4654a",
-  brickLite: "#f0a090",
-  mortar: "#efd3c2",
-  q: "#f2c14e",
-  qLite: "#ffe39a",
-  qDark: "#a56a18",
-  qMark: "#5c3410",
-  pipe: "#3cb54a",
-  pipeLite: "#b6ee78",
-  pipeDark: "#1b7a30",
-  pipeRim: "#145c24",
-  spike: "#6a7380",
-  spikeLite: "#e7eef6",
-  spikeEdge: "#2a3038",
-  cap: "#e23b3b",
-  capDark: "#b42323",
-  skin: "#f0b48a",
-  eye: "#1a1a1a",
-  mustache: "#4a2c22",
-  overall: "#2c3f86",
-  button: "#f0d060",
-  shoe: "#3e2a22",
-  sole: "#f4f7fb",
-  ink: "#142033",
-  paper: "#f7fbff",
-  white: "#ffffff"
-};
+const SCENES = [
+  {
+    id: "meadow",
+    name: "MEADOW",
+    grav: 1,
+    jump: 1,
+    sky: "#6ec6ff",
+    cloud: "#f7fcff",
+    cloudShade: "#d7ecf8",
+    hill: "#3aaa4a",
+    hillFar: "#8ed487",
+    hillShade: "#1f7a32",
+    grass: "#5ec63a",
+    grassDark: "#2f8f22",
+    ground: "#c4844a",
+    groundDark: "#8d552c",
+    groundDeep: "#6b3e22",
+    brick: "#d4654a",
+    brickLite: "#f0a090",
+    mortar: "#efd3c2",
+    pipe: "#3cb54a",
+    pipeLite: "#b6ee78",
+    pipeDark: "#1b7a30",
+    accent: "#e23b3b",
+    ink: "#142033",
+    kinds: ["coins", "spike", "spike2", "pipeS", "pipeT", "qblock", "stair", "bug", "bridge", "pit"]
+  },
+  {
+    id: "lagoon",
+    name: "LAGOON",
+    grav: 0.5,
+    jump: 0.72,
+    sky: "#146888",
+    cloud: "#d8fff8",
+    cloudShade: "#8ad4c8",
+    hill: "#1d8a78",
+    hillFar: "#2a6a78",
+    hillShade: "#0e4a48",
+    grass: "#e6c98a",
+    grassDark: "#c4a264",
+    ground: "#c98b4a",
+    groundDark: "#8d5a30",
+    groundDeep: "#5c3a22",
+    brick: "#de7a62",
+    brickLite: "#f0b0a0",
+    mortar: "#f0d8c8",
+    pipe: "#3a9a88",
+    pipeLite: "#9ee0c8",
+    pipeDark: "#1a5a50",
+    accent: "#ff7a8a",
+    ink: "#062028",
+    kinds: ["coins", "coral", "fish", "fishHigh", "qblock", "weed", "pit"]
+  },
+  {
+    id: "canopy",
+    name: "CANOPY",
+    grav: 1,
+    jump: 1,
+    sky: "#8fd0ff",
+    cloud: "#f4fff4",
+    cloudShade: "#c8e8c0",
+    hill: "#2f8a40",
+    hillFar: "#67b06a",
+    hillShade: "#1a5828",
+    grass: "#3aaa4a",
+    grassDark: "#1f7a32",
+    ground: "#6b4428",
+    groundDark: "#4a2e1c",
+    groundDeep: "#2e1c10",
+    brick: "#a86838",
+    brickLite: "#d8a070",
+    mortar: "#efd2b4",
+    pipe: "#8a5a32",
+    pipeLite: "#c48a58",
+    pipeDark: "#5a3418",
+    accent: "#d2f06a",
+    ink: "#142010",
+    kinds: ["coins", "trunk", "pit", "pitTrunk", "glider", "gliderHigh", "bug"]
+  },
+  {
+    id: "cloudway",
+    name: "CLOUDWAY",
+    grav: 1,
+    jump: 1,
+    sky: "#9fd4ff",
+    cloud: "#ffffff",
+    cloudShade: "#d5e8f8",
+    hill: "#ffffff",
+    hillFar: "#e7f4ff",
+    hillShade: "#b9d4ea",
+    grass: "#f7fbff",
+    grassDark: "#d5e6f4",
+    ground: "#c5d8ea",
+    groundDark: "#9bb6cc",
+    groundDeep: "#7e9ab2",
+    brick: "#f0d080",
+    brickLite: "#fff0c0",
+    mortar: "#e8c888",
+    pipe: "#f7fbff",
+    pipeLite: "#ffffff",
+    pipeDark: "#b7cce0",
+    accent: "#f2c14e",
+    ink: "#243044",
+    kinds: ["coinArc", "pit", "highCloud", "island", "coins"]
+  },
+  {
+    id: "steps",
+    name: "STEPS",
+    grav: 1,
+    jump: 1,
+    sky: "#7eb6e8",
+    cloud: "#f4f8ff",
+    cloudShade: "#d0dcf0",
+    hill: "#c45a3a",
+    hillFar: "#d89078",
+    hillShade: "#8a3a28",
+    grass: "#e07a58",
+    grassDark: "#b85a40",
+    ground: "#a09080",
+    groundDark: "#706058",
+    groundDeep: "#483830",
+    brick: "#c45a3a",
+    brickLite: "#f0a090",
+    mortar: "#f0d0c0",
+    pipe: "#b85a40",
+    pipeLite: "#e09078",
+    pipeDark: "#7a3424",
+    accent: "#ffd15c",
+    ink: "#241810",
+    kinds: ["pyramid", "pyramidGap", "spike", "qblock", "coins", "bug"]
+  },
+  {
+    id: "grove",
+    name: "GROVE",
+    grav: 1,
+    jump: 1,
+    sky: "#87c8f0",
+    cloud: "#fff8ee",
+    cloudShade: "#f0d8c0",
+    hill: "#e07a58",
+    hillFar: "#f0b090",
+    hillShade: "#a84838",
+    grass: "#6aaa48",
+    grassDark: "#3e7a30",
+    ground: "#6b4a32",
+    groundDark: "#4a3020",
+    groundDeep: "#2e1c14",
+    brick: "#e05a48",
+    brickLite: "#ffb090",
+    mortar: "#f8d8c0",
+    pipe: "#f0d2a0",
+    pipeLite: "#fff0d4",
+    pipeDark: "#c8a070",
+    accent: "#ffe08a",
+    ink: "#2a1408",
+    kinds: ["shroom", "shroomPit", "coins", "bug", "qblock"]
+  },
+  {
+    id: "night",
+    name: "NIGHT GATE",
+    grav: 1,
+    jump: 1,
+    sky: "#1a1840",
+    cloud: "#c8c8e8",
+    cloudShade: "#8888b0",
+    hill: "#3a3058",
+    hillFar: "#2a2848",
+    hillShade: "#141228",
+    grass: "#4a5570",
+    grassDark: "#323848",
+    ground: "#3a3e50",
+    groundDark: "#242833",
+    groundDeep: "#141820",
+    brick: "#6a3a48",
+    brickLite: "#a06070",
+    mortar: "#c8a0a8",
+    pipe: "#5a5e78",
+    pipeLite: "#9aa0b8",
+    pipeDark: "#2e3248",
+    accent: "#f0e6c0",
+    ink: "#f4f0e8",
+    kinds: ["spike2", "pillar", "bug", "pit", "stair", "qblock", "spike"]
+  }
+];
+
+function sceneDef() {
+  return SCENES[state.sceneIndex % SCENES.length];
+}
+
+function stageNumber() {
+  return state.sceneIndex + 1;
+}
 
 // ============================================================
 // CRUZIO
-// Each letter is one pixel. A dot is empty air.
+// Each letter is one pixel. A dot is empty.
 // He faces right: red cap, mustache, indigo overalls.
 // ============================================================
 
@@ -154,41 +316,76 @@ const SPRITE = {
   ]
 };
 
-// How tall the drawing is. The low brick stays above this.
 const SPRITE_H = SPRITE.runA.length;
+
+// A round ground bug. Orange body, big eyes, tiny feet.
+const BUG_SPRITE = [
+  "..OOOOOO..",
+  ".OOOWWOOO.",
+  ".OOKWOKOO.",
+  ".OOOOOOOO.",
+  "..OOOOOO..",
+  ".o......o."
+];
+
+// A swimming fish. Teal body, tail on the left because it swims left.
+const FISH_SPRITE = [
+  "TT...BBBBB..",
+  "TTT.BBWWBB..",
+  "TTTTBBKBBB..",
+  "TTT.BBBBBB..",
+  "TT...BBBB..."
+];
+
+// A little flying critter. Wings out, green body.
+const GLIDER_SPRITE = [
+  "W........W",
+  "WW..GG..WW",
+  ".WWGGGGWW.",
+  "..GGGGGG..",
+  "...G..G..."
+];
 
 function cruzioColor(ch) {
   switch (ch) {
-    case "R": return PAL.cap;
-    case "D": return PAL.capDark;
-    case "W": return PAL.sole;
-    case "S": return PAL.skin;
-    case "E": return PAL.eye;
-    case "K": return PAL.mustache;
-    case "O": return PAL.overall;
-    case "B": return PAL.button;
-    case "N": return PAL.shoe;
+    case "R": return "#e23b3b";
+    case "D": return "#b42323";
+    case "W": return "#f4f7fb";
+    case "S": return "#f0b48a";
+    case "E": return "#1a1a1a";
+    case "K": return "#4a2c22";
+    case "O": return "#2c3f86";
+    case "B": return "#f0d060";
+    case "N": return "#3e2a22";
     default: return null;
   }
 }
 
-// Warn in the console if a row was edited to the wrong length.
-(function checkSprites() {
-  const frames = [SPRITE.runA, SPRITE.runB, SPRITE.jump];
-  for (let f = 0; f < frames.length; f++) {
-    const width = frames[f][0].length;
-    for (let r = 0; r < frames[f].length; r++) {
-      if (frames[f][r].length !== width) {
-        console.warn("Cruzio sprite row", r, "in frame", f, "is not", width, "pixels wide.");
-      }
-    }
-  }
-})();
+function bugColor(ch) {
+  if (ch === "O") return "#f08a28";
+  if (ch === "W") return "#fff6e8";
+  if (ch === "K") return "#1a1a1a";
+  if (ch === "o") return "#8a4a18";
+  return null;
+}
+
+function fishColor(ch) {
+  if (ch === "B") return "#ffd15c";
+  if (ch === "W") return "#fff6d0";
+  if (ch === "K") return "#1a1a1a";
+  if (ch === "T") return "#e07a28";
+  return null;
+}
+
+function gliderColor(ch) {
+  if (ch === "G") return "#7ed24a";
+  if (ch === "W") return "#f4fff4";
+  return null;
+}
 
 // ============================================================
 // PIXEL FONT
-// 3 pixels wide, 5 tall. M and W are 5 wide so they stay readable.
-// 1 = ink. This is our own chunky font, drawn dot by dot.
+// Our own chunky letters. 1 = ink.
 // ============================================================
 
 const GLYPH = {
@@ -217,7 +414,7 @@ const GLYPH = {
   Y: ["101", "101", "010", "010", "010"],
   Z: ["111", "001", "010", "100", "111"],
   "0": ["111", "101", "101", "101", "111"],
-  "1": ["010", "110", "010", "010", "111"],
+  "1": ["110", "010", "010", "010", "111"],
   "2": ["111", "001", "111", "100", "111"],
   "3": ["111", "001", "011", "001", "111"],
   "4": ["101", "101", "111", "001", "001"],
@@ -229,8 +426,7 @@ const GLYPH = {
   "?": ["110", "001", "010", "000", "010"],
   "!": ["010", "010", "010", "000", "010"],
   "-": ["000", "000", "111", "000", "000"],
-  ".": ["000", "000", "000", "000", "010"],
-  "=": ["000", "111", "000", "111", "000"]
+  ".": ["000", "000", "000", "000", "010"]
 };
 
 const WIDE = {
@@ -246,10 +442,7 @@ function textWidth(text, scale) {
   let w = 0;
   const s = String(text).toUpperCase();
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === " ") {
-      w += 3 * scale;
-      continue;
-    }
+    if (s[i] === " ") { w += 3 * scale; continue; }
     const rows = glyphRows(s[i]);
     const gw = rows ? rows[0].length : 3;
     w += gw * scale + scale;
@@ -259,109 +452,79 @@ function textWidth(text, scale) {
 
 // ============================================================
 // STATE
-// mode is "title", "play", or "dead".
-// y goes UP from the ground. y = 0 means feet on the grass.
+// y goes UP. y = 0 is the ground, unless a pit is under Cruzio.
 // ============================================================
-
-const canvas = document.getElementById("game");
-const out = canvas.getContext("2d");
-const buffer = document.createElement("canvas");
-const ctx = buffer.getContext("2d");
 
 const player = {
   x: START_X,
   y: 0,
+  prevY: 0,
   vy: 0,
-  onGround: true
+  onGround: true,
+  wasHolding: false
 };
 
 const obstacles = [];
 const particles = [];
 
 const state = {
-  mode: "title",
+  mode: "title", // title, play, dead, clear
+  sceneIndex: 0,
+  levelStartX: START_X,
+  goalSpawned: false,
   score: 0,
   bonus: 0,
+  coins: 0,
   best: 0,
   bestAtStart: 0,
   jumpBuffer: 0,
-  cursor: START_X + 140,
+  cursor: START_X + 280,
   patternCount: 0,
   deadFor: 0,
+  clearFor: 0,
   shake: 0,
-  hasJumped: false,
-  preview: 0,
-  stepAcc: 0
+  bannerT: 0,
+  hasJumped: false
 };
 
-let viewW = 320;
-let viewH = 180;
-let cssW = 320;
-let cssH = 180;
+let holding = false;
+let muted = false;
+let viewW = 480;
+let viewH = 270;
+let cssW = 800;
+let cssH = 450;
 let cameraX = 0;
 let lastTime = 0;
 let audioCtx = null;
 
-const reduceMotion = window.matchMedia &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// ============================================================
-// SCENERY
-// Hills and clouds are generated once, then scrolled.
-// LOOP is the width of one repeating strip.
-// ============================================================
-
-const LOOP = 1600;
-const hillsFar = [];
-const hillsNear = [];
-const clouds = [];
-
-function buildScenery() {
-  for (let x = 0; x < LOOP; x += 110) {
-    hillsFar.push({ x: x + 10, r: 28 + ((x / 11) | 0) % 16 });
-  }
-  for (let x = 30; x < LOOP; x += 160) {
-    hillsNear.push({ x: x, r: 16 + ((x / 19) | 0) % 12 });
-  }
-  for (let i = 0; i < 10; i++) {
-    clouds.push({
-      x: i * 170 + 20,
-      // Fraction of the sky height, so tall phones still have clouds.
-      yFrac: 0.12 + (i % 4) * 0.13,
-      kind: i % 3
-    });
-  }
-}
-
-// ============================================================
-// SAVE / LOAD
-// localStorage keeps the best score on this device after you close the tab.
-// ============================================================
-
-function loadBest() {
-  try {
-    const n = parseInt(localStorage.getItem(BEST_KEY), 10);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  } catch (err) {
-    return 0;
-  }
-}
-
-function saveBest(n) {
-  try {
-    localStorage.setItem(BEST_KEY, String(n));
-  } catch (err) {
-    // Private mode can block storage. The game still runs.
-  }
-}
+let canvas, out, buffer, ctx;
+let reduceMotion = false;
 
 // ============================================================
 // SOUND
 // Short beeps from the Web Audio oscillator. No audio files.
-// Browsers only allow sound after a tap, so we start it on the first press.
+// The mute button skips them.
 // ============================================================
 
+function loadMute() {
+  try { return localStorage.getItem(MUTE_KEY) === "1"; }
+  catch (err) { return false; }
+}
+
+function paintMute() {
+  const btn = document.getElementById("mute");
+  if (btn) btn.textContent = muted ? "Off" : "Sfx";
+}
+
+function toggleMute() {
+  muted = !muted;
+  paintMute();
+  try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); }
+  catch (err) { /* private mode */ }
+}
+
 function unlockAudio() {
+  if (muted) return;
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -372,225 +535,256 @@ function unlockAudio() {
   }
 }
 
-function beep(freq, dur, type, vol) {
-  if (!audioCtx) return;
+function tone(freq, dur, type, vol) {
+  if (muted || !audioCtx) return;
   try {
     const t = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = type || "square";
     osc.frequency.setValueAtTime(freq, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.45), t + dur);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.5), t + dur);
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
     osc.stop(t + dur + 0.02);
-  } catch (err) {
-    // Ignore a beep that the browser refused.
+  } catch (err) { /* ignore */ }
+}
+
+function fanfare() {
+  const notes = [523, 659, 784, 1046];
+  for (let i = 0; i < notes.length; i++) {
+    setTimeout(function () { tone(notes[i], 0.12, "square", 0.04); }, i * 90);
   }
 }
 
 // ============================================================
 // INPUT
-// One function handles every "go" press: start, jump, or retry.
+// holding stays true until the finger, mouse, or key comes up.
+// That is what makes a tap short and a hold tall.
 // ============================================================
+
+function isUi(target) {
+  return target && target.closest && (target.closest("#home") || target.closest("#mute"));
+}
 
 function onPress() {
   unlockAudio();
   if (state.mode === "title") {
     resetRun();
     state.mode = "play";
-    beep(520, 0.06, "square", 0.035);
+    holding = false;
+    tone(520, 0.06, "square", 0.03);
     return;
   }
   if (state.mode === "dead") {
-    // Ignore the moment of the crash so a held tap does not instantly restart.
-    if (state.deadFor > 0.4) {
+    if (state.deadFor > 0.35) {
       resetRun();
       state.mode = "play";
     }
+    holding = false;
     return;
   }
-  // Remember the tap for a short moment. If Cruzio lands during that
-  // window, he still jumps. Phones often tap a frame early.
-  state.jumpBuffer = 0.16;
+  if (state.mode !== "play") return;
+  state.jumpBuffer = 0.12;
+  holding = true;
 }
 
-function isHomeLink(target) {
-  return target && target.closest && target.closest("#home");
+function onRelease() {
+  holding = false;
 }
 
-window.addEventListener("keydown", function (e) {
-  if (e.repeat) return;
-  const jumpKey = e.code === "Space" || e.code === "ArrowUp" ||
-    e.code === "KeyW" || e.code === "Enter";
-  if (!jumpKey) return;
-  if (e.target && e.target.id === "home") return;
-  e.preventDefault();
-  onPress();
-});
-
-// pointerdown covers a mouse click and a finger tap.
-window.addEventListener("pointerdown", function (e) {
-  if (isHomeLink(e.target)) return;
-  if (e.pointerType === "mouse" && e.button !== 0) return;
-  onPress();
-});
-
-// Stop the page from scrolling, zooming, or opening a long-press menu.
-document.addEventListener("touchstart", function (e) {
-  if (!isHomeLink(e.target)) e.preventDefault();
-}, { passive: false });
-
-document.addEventListener("touchmove", function (e) {
-  e.preventDefault();
-}, { passive: false });
-
-document.addEventListener("gesturestart", function (e) {
-  e.preventDefault();
-});
-
-document.addEventListener("dblclick", function (e) {
-  e.preventDefault();
-});
-
-document.addEventListener("contextmenu", function (e) {
-  e.preventDefault();
-});
+function bindInput() {
+  window.addEventListener("keydown", function (e) {
+    if (e.repeat) return;
+    const jumpKey = e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW";
+    if (!jumpKey) return;
+    if (e.target && (e.target.id === "home" || e.target.id === "mute")) return;
+    e.preventDefault();
+    onPress();
+  });
+  window.addEventListener("keyup", function (e) {
+    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") onRelease();
+  });
+  window.addEventListener("pointerdown", function (e) {
+    if (isUi(e.target)) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    onPress();
+  });
+  window.addEventListener("pointerup", onRelease);
+  window.addEventListener("pointercancel", onRelease);
+  const mute = document.getElementById("mute");
+  if (mute) {
+    mute.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    mute.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMute();
+    });
+  }
+  document.addEventListener("touchstart", function (e) {
+    if (!isUi(e.target)) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+}
 
 // ============================================================
 // COURSE
-// Obstacles are stamped just past the right edge of the screen,
-// then thrown away once they scroll off the left.
+// makePattern drops one chunk at world x and returns how wide it is.
+// Pieces are kept small enough that a full jump clears them.
 // ============================================================
 
-function courseDist(x) {
-  return Math.max(0, x - START_X);
+function addObj(obj) {
+  if (obj.x != null && obj.home == null) obj.home = obj.x;
+  obstacles.push(obj);
 }
 
-function difficulty() {
-  // Full speed is a long way down the course, so the start stays calm.
-  return Math.max(0, Math.min(1, courseDist(player.x) / 9000));
-}
-
-// 0 = the first ~20 seconds. 3 = the far end of a long run.
-function bandAt(x) {
-  const dist = courseDist(x);
-  if (dist < 2000) return 0;
-  if (dist < 4200) return 1;
-  if (dist < 7000) return 2;
-  return 3;
-}
-
-function runSpeed() {
-  const speed = SPEED_START + (SPEED_MAX - SPEED_START) * difficulty();
-  // A tall phone shows less road ahead, so ease the pace a little.
-  if (viewH > viewW * 1.15) return speed * 0.82;
-  return speed;
-}
-
-function stampSpikes(x, count) {
-  const w = 12;
-  for (let i = 0; i < count; i++) {
-    obstacles.push({ type: "spike", x: x + i * w, y: 0, w: w, h: 12 });
+function makePattern(kind, x) {
+  if (kind === "coins") {
+    for (let i = 0; i < 4; i++) addObj({ type: "coin", x: x + i * 16, y: 36, w: 10, h: 10 });
+    return 64;
   }
-  return count * w;
-}
-
-function stampPipe(x, totalH) {
-  obstacles.push({ type: "pipe", x: x, y: 0, w: 18, h: totalH });
-  return 18;
-}
-
-function stampBrick(x, y, cols, rows) {
-  obstacles.push({
-    type: "brick",
-    x: x,
-    y: y,
-    w: cols * 16,
-    h: rows * 16
-  });
-  return cols * 16;
-}
-
-function stampQuestion(x, y) {
-  obstacles.push({ type: "question", x: x, y: y, w: 16, h: 16, gone: false });
-  return 16;
-}
-
-// One named chunk of the course. Heights stay inside the jump arc:
-// a full hop clears them, and the gap afterward is long enough to land.
-function stampKind(kind, x) {
-  if (kind === "spike1") return stampSpikes(x, 1);
-  if (kind === "spike2") return stampSpikes(x, 2);
-  if (kind === "spike3") return stampSpikes(x, 3);
-  if (kind === "pipeS") return stampPipe(x, 18);
-  if (kind === "pipeM") return stampPipe(x, 32);
-  if (kind === "pipeT") return stampPipe(x, 44);
-  if (kind === "brick1") return stampBrick(x, 0, 1, 1);
-  if (kind === "brick2") return stampBrick(x, 0, 1, 2);
-  if (kind === "low") return stampBrick(x, LOW_BRICK_Y, 2, 1);
-  if (kind === "question") return stampQuestion(x, 48);
-  if (kind === "spikeQ") {
-    const w = stampSpikes(x, 1);
-    stampQuestion(x, 48);
-    return Math.max(w, 16);
+  if (kind === "coinArc") {
+    for (let i = 0; i < 5; i++) {
+      const lift = Math.sin((i / 4) * Math.PI) * 28;
+      addObj({ type: "coin", x: x + i * 16, y: 28 + lift, w: 10, h: 10 });
+    }
+    return 80;
   }
-  return stampSpikes(x, 1);
-}
-
-function kindsAt(x) {
-  const band = bandAt(x);
-  // Band 0 is the opening: one short thing at a time.
-  const list = ["spike1", "pipeS", "brick1", "spikeQ", "question"];
-  if (band >= 1) list.push("spike2", "pipeM", "brick2");
-  if (band >= 2) list.push("pipeT", "low");
-  // Three spikes in a row need a bit of speed behind them, so they wait.
-  if (band >= 3) list.push("spike3");
-  return list;
-}
-
-// The first obstacles are always the same, so a new player
-// can learn spike, then a short pipe, then a brick.
-function stampNext(x) {
-  const n = state.patternCount;
-  state.patternCount += 1;
-  if (n === 0) return stampKind("spike1", x);
-  if (n === 1) return stampKind("pipeS", x);
-  if (n === 2) return stampKind("brick1", x);
-  if (n === 3) return stampKind("spike1", x);
-  if (n === 4) return stampKind("question", x);
-  const kinds = kindsAt(x);
-  // Early on, leave a blank patch fairly often so there is time to breathe.
-  const breather = bandAt(x) === 0 ? 0.18 : 0.08;
-  if (Math.random() < breather) return 0;
-  return stampKind(kinds[Math.floor(Math.random() * kinds.length)], x);
-}
-
-function minGapAt(x) {
-  return [190, 160, 140, 125][bandAt(x)];
+  if (kind === "spike" || kind === "spike2") {
+    const n = kind === "spike2" ? 3 : 1;
+    for (let i = 0; i < n; i++) addObj({ type: "spike", x: x + i * 14, y: 0, w: 14, h: 12 });
+    return n * 14;
+  }
+  if (kind === "pipeS") {
+    addObj({ type: "pipe", x: x, y: 0, w: 18, h: 16 });
+    return 18;
+  }
+  if (kind === "pipeT" || kind === "pillar" || kind === "trunk") {
+    const h = kind === "trunk" ? 46 : 42;
+    addObj({ type: kind === "pipeT" ? "pipe" : kind, x: x, y: 0, w: 20, h: h });
+    return 20;
+  }
+  if (kind === "qblock") {
+    addObj({ type: "q", x: x, y: 36, w: 16, h: 16, float: true, used: false });
+    addObj({ type: "coin", x: x + 3, y: 78, w: 10, h: 10 });
+    return 16;
+  }
+  if (kind === "stair" || kind === "pyramid") {
+    const steps = 3;
+    const cols = steps * 2 - 1;
+    for (let i = 0; i < cols; i++) {
+      const level = i < steps ? i + 1 : cols - i;
+      addObj({ type: "block", x: x + i * TILE, y: 0, w: TILE, h: level * TILE });
+    }
+    return cols * TILE;
+  }
+  if (kind === "pyramidGap") {
+    const w1 = makePattern("pyramid", x);
+    addObj({ type: "pit", x: x + w1 + 8, w: 34 });
+    const w2 = makePattern("pyramid", x + w1 + 8 + 34 + 8);
+    return w1 + 8 + 34 + 8 + w2;
+  }
+  if (kind === "bug") {
+    addObj({ type: "bug", x: x + 20, y: 0, w: 14, h: 12, vx: -26, home: x + 20 });
+    return 50;
+  }
+  if (kind === "bridge") {
+    addObj({ type: "block", x: x, y: 40, w: TILE * 3, h: TILE, float: true });
+    addObj({ type: "coin", x: x + 8, y: 70, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 28, y: 70, w: 10, h: 10 });
+    return TILE * 3;
+  }
+  if (kind === "pit" || kind === "island") {
+    addObj({ type: "pit", x: x, w: 34 });
+    if (kind === "island") {
+      addObj({ type: "pit", x: x + 34 + 48, w: 34 });
+      return 34 + 48 + 34;
+    }
+    return 34;
+  }
+  if (kind === "coral") {
+    addObj({ type: "block", x: x, y: 0, w: 14, h: 12 });
+    addObj({ type: "deco", x: x, y: 12, w: 14, h: 16, deco: "coral" });
+    return 14;
+  }
+  if (kind === "weed") {
+    addObj({ type: "block", x: x, y: 28, w: 36, h: 10, float: true });
+    return 36;
+  }
+  if (kind === "fish") {
+    addObj({ type: "fish", x: x + 10, y: 0, w: 16, h: 12, vx: -22, home: x + 10 });
+    return 40;
+  }
+  if (kind === "fishHigh") {
+    addObj({ type: "fish", x: x, y: 40, w: 16, h: 12, vx: -18, home: x });
+    return 30;
+  }
+  if (kind === "glider") {
+    addObj({ type: "glider", x: x + 10, y: 0, w: 16, h: 12, vx: -20, home: x + 10 });
+    return 46;
+  }
+  if (kind === "gliderHigh") {
+    addObj({ type: "glider", x: x, y: 44, w: 16, h: 12, vx: -16, home: x });
+    return 30;
+  }
+  if (kind === "pitTrunk") {
+    addObj({ type: "pit", x: x, w: 32 });
+    addObj({ type: "trunk", x: x + 32, y: 0, w: 26, h: 36 });
+    return 58;
+  }
+  if (kind === "highCloud") {
+    addObj({ type: "block", x: x, y: 48, w: 52, h: 12, float: true, cloud: true });
+    addObj({ type: "coin", x: x + 8, y: 74, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 28, y: 82, w: 10, h: 10 });
+    return 52;
+  }
+  if (kind === "shroom") {
+    // Wide cap with a narrow stem. Jump onto the cap, run across, drop off.
+    addObj({ type: "block", x: x, y: 30, w: 84, h: 14, float: true, shroom: true });
+    addObj({ type: "pipe", x: x + 34, y: 0, w: 16, h: 30, stem: true });
+    addObj({ type: "coin", x: x + 20, y: 58, w: 10, h: 10 });
+    addObj({ type: "coin", x: x + 52, y: 58, w: 10, h: 10 });
+    return 84;
+  }
+  if (kind === "shroomPit") {
+    const w = makePattern("shroom", x);
+    addObj({ type: "pit", x: x + w + 10, w: 32 });
+    return w + 10 + 32 + 16;
+  }
+  return 0;
 }
 
 function spawnAhead() {
-  const edge = cameraX + viewW + 80;
+  if (state.goalSpawned || state.mode === "clear") return;
+  const scene = sceneDef();
+  const endX = state.levelStartX + LEVEL_LEN;
   let guard = 0;
-  while (state.cursor < edge && guard < 30) {
+  while (state.cursor < cameraX + viewW + 140 && state.cursor < endX - 30 && guard < 14) {
     guard += 1;
-    if (state.patternCount > 0) {
-      // Never closer than minGapAt. A late jump still lands before the next one.
-      state.cursor += minGapAt(state.cursor) + Math.floor(Math.random() * 36);
-    }
-    state.cursor += stampNext(state.cursor);
+    if (state.patternCount > 0) state.cursor += MIN_GAP;
+    const kinds = scene.kinds;
+    const kind = state.patternCount === 0 ? kinds[0] : kinds[Math.floor(Math.random() * kinds.length)];
+    state.patternCount += 1;
+    state.cursor += makePattern(kind, state.cursor);
+  }
+  if (!state.goalSpawned && state.cursor >= endX - 30) {
+    addObj({ type: "pole", x: endX + 36, y: 0, w: 8, h: 112 });
+    state.goalSpawned = true;
   }
 }
 
 function prune() {
-  const left = cameraX - 80;
+  const left = cameraX - 120;
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const o = obstacles[i];
-    if (o.gone || o.x + o.w < left) obstacles.splice(i, 1);
+    const w = o.w || 10;
+    if (o.got || o.dead || (o.x + w < left && o.type !== "pole")) obstacles.splice(i, 1);
   }
 }
 
@@ -598,95 +792,84 @@ function prune() {
 // RULES
 // ============================================================
 
-function playerBox() {
-  return {
-    x: player.x - PLAYER_W / 2,
-    y: player.y,
-    w: PLAYER_W,
-    h: PLAYER_H
-  };
+function runSpeed() {
+  const along = Math.max(0, Math.min(1, (player.x - state.levelStartX) / LEVEL_LEN));
+  let s = SPEED_START + state.sceneIndex * SPEED_STEP + along * SPEED_RAMP;
+  if (s > SPEED_MAX) s = SPEED_MAX;
+  // A tall phone shows less of the road, so ease off a little.
+  if (viewH > viewW * 1.15) s *= 0.9;
+  return s;
 }
 
-function overlap(a, b) {
-  return a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y;
+function sceneGrav() {
+  const sc = sceneDef();
+  return { hold: GRAVITY_HOLD * sc.grav, fall: GRAVITY_FALL * sc.grav, jump: JUMP_V * sc.jump };
 }
 
-// Spikes are pointy, so only the center counts.
-// Pipes and bricks lose a few pixels on the sides and the top,
-// so a near miss is not a crash.
-function solidBox(o) {
-  if (o.type === "spike") {
-    return {
-      x: o.x + 4,
-      y: o.y,
-      w: Math.max(4, o.w - 8),
-      h: Math.max(4, o.h - 5)
-    };
+function boxAt(px, py) {
+  return { x: px - PLAYER_W / 2, y: py, w: PLAYER_W, h: PLAYER_H };
+}
+
+function hit(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function overlapX(px, s) {
+  const left = px - PLAYER_W / 2;
+  return left < s.x + s.w && left + PLAYER_W > s.x;
+}
+
+function isPlatform(o) {
+  return o.type === "block" || o.type === "q" || o.type === "pipe" || o.type === "trunk" || o.type === "pillar";
+}
+
+function pitUnder(px) {
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.type === "pit" && px > o.x + 3 && px < o.x + o.w - 3) return true;
   }
+  return false;
+}
+
+function hazardBox(o) {
   return {
     x: o.x + 3,
-    y: o.y,
+    y: o.y + 2,
     w: Math.max(4, o.w - 6),
     h: Math.max(4, o.h - 5)
   };
 }
 
-function puff() {
-  particles.push({
-    x: player.x - 8,
-    y: 2,
-    vx: -28 - Math.random() * 24,
-    vy: 10 + Math.random() * 18,
-    life: 0.26,
-    max: 0.26,
-    color: Math.random() < 0.5 ? PAL.dirtLite : PAL.grassDark,
-    s: 2
-  });
-}
-
-function burst() {
-  const colors = [PAL.cap, PAL.overall, PAL.skin, PAL.button, PAL.shoe, PAL.sole];
-  for (let i = 0; i < 16; i++) {
-    particles.push({
-      x: player.x,
-      y: player.y + 8,
-      vx: (Math.random() - 0.35) * 150,
-      vy: 40 + Math.random() * 170,
-      life: 0.45 + Math.random() * 0.3,
-      max: 0.75,
-      color: colors[i % colors.length],
-      s: 2 + (i % 3)
-    });
-  }
-}
-
-function spark(o) {
+function puffAt(x, y, color) {
   for (let i = 0; i < 6; i++) {
     particles.push({
-      x: o.x + 8,
-      y: o.y + 8,
+      x: x, y: y,
       vx: (Math.random() - 0.5) * 70,
       vy: 20 + Math.random() * 50,
-      life: 0.32,
-      max: 0.32,
-      color: i % 2 ? PAL.q : PAL.white,
-      s: 2
+      life: 0.35, max: 0.35,
+      color: color, s: 2
     });
   }
 }
 
-function updateParticles(dt) {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.life -= dt;
-    p.vy -= GRAVITY * 0.4 * dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    if (p.y < 0) p.y = 0;
-    if (p.life <= 0) particles.splice(i, 1);
+function grantCoin(x, y) {
+  state.coins += 1;
+  state.bonus += COIN_POINTS;
+  particles.push({
+    x: x, y: y, vx: 0, vy: 70,
+    life: 0.45, max: 0.45,
+    color: "#f2c14e", s: 4, coin: true
+  });
+  tone(880, 0.07, "square", 0.04);
+  tone(1180, 0.08, "square", 0.03);
+}
+
+function noteScore() {
+  state.score = Math.floor(Math.max(0, player.x - START_X) / 8) + state.bonus;
+  if (state.score > state.best) {
+    state.best = state.score;
+    try { localStorage.setItem(BEST_KEY, String(state.best)); }
+    catch (err) { /* ignore */ }
   }
 }
 
@@ -696,100 +879,255 @@ function die() {
   state.mode = "dead";
   state.deadFor = 0;
   state.shake = 1;
-  burst();
-  beep(160, 0.28, "sawtooth", 0.05);
-  saveBest(state.best);
+  for (let i = 0; i < 16; i++) {
+    particles.push({
+      x: player.x,
+      y: player.y + 8,
+      vx: (Math.random() - 0.3) * 140,
+      vy: 40 + Math.random() * 150,
+      life: 0.5 + Math.random() * 0.2,
+      max: 0.7,
+      color: i % 2 ? "#e23b3b" : "#2c3f86",
+      s: 2 + (i % 3)
+    });
+  }
+  tone(160, 0.28, "sawtooth", 0.05);
 }
 
-function noteScore() {
-  state.score = Math.floor((player.x - START_X) / 8) + state.bonus;
-  if (state.score < 0) state.score = 0;
-  if (state.score > state.best) {
-    state.best = state.score;
-    saveBest(state.best);
+function beginClear() {
+  if (state.mode !== "play") return;
+  noteScore();
+  state.mode = "clear";
+  state.clearFor = 0;
+  fanfare();
+}
+
+function advanceScene() {
+  state.sceneIndex += 1;
+  state.levelStartX = player.x + 30;
+  state.goalSpawned = false;
+  state.patternCount = 0;
+  state.cursor = player.x + 200;
+  state.bannerT = 2.5;
+  state.mode = "play";
+  player.y = 0;
+  player.prevY = 0;
+  player.vy = 0;
+  player.onGround = true;
+  obstacles.length = 0;
+  spawnAhead();
+}
+
+function moveActors(dt) {
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.dead || o.got || !o.vx) continue;
+    o.x += o.vx * dt;
+    if (o.home != null && (o.x < o.home - 64 || o.x > o.home + 24)) o.vx *= -1;
   }
 }
 
-function stepPlay(dt, speed) {
+function resolveWalls() {
+  let stepped = null;
+  let blocked = false;
+  for (let i = 0; i < obstacles.length; i++) {
+    const s = obstacles[i];
+    if (!isPlatform(s) || s.float) continue;
+    if (!overlapX(player.x, s)) continue;
+    const top = s.y + s.h;
+    if (player.y >= top - 0.8) continue;
+    if (top - player.y <= STEP_UP) {
+      if (stepped == null || top > stepped) stepped = top;
+    } else {
+      blocked = true;
+    }
+  }
+  if (stepped != null) {
+    player.y = stepped;
+    player.vy = 0;
+    player.onGround = true;
+    return;
+  }
+  if (blocked) die();
+}
+
+function tryLand() {
+  let best = null;
+  for (let i = 0; i < obstacles.length; i++) {
+    const s = obstacles[i];
+    if (!isPlatform(s)) continue;
+    const top = s.y + s.h;
+    if (player.prevY >= top - 4 && player.y <= top + 1 && overlapX(player.x, s)) {
+      if (best == null || top > best) best = top;
+    }
+  }
+  if (best == null) return false;
+  player.y = best;
+  player.vy = 0;
+  player.onGround = true;
+  return true;
+}
+
+function tryBump() {
+  const head = player.y + PLAYER_H;
+  const prevHead = player.prevY + PLAYER_H;
+  for (let i = 0; i < obstacles.length; i++) {
+    const s = obstacles[i];
+    if (s.type !== "q" && !(s.type === "block" && s.float)) continue;
+    if (prevHead <= s.y + 4 && head >= s.y && overlapX(player.x, s)) {
+      player.y = s.y - PLAYER_H - 0.2;
+      if (player.vy > 0) player.vy = 0;
+      if (s.type === "q" && !s.used) {
+        s.used = true;
+        grantCoin(s.x + 3, s.y + s.h + 4);
+      } else {
+        tone(180, 0.05, "square", 0.03);
+      }
+    }
+  }
+}
+
+function touchHazards() {
+  const box = boxAt(player.x, player.y);
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.dead || o.got) continue;
+    const enemy = o.type === "bug" || o.type === "fish" || o.type === "glider";
+    if (enemy && player.vy < 0) {
+      const top = o.y + o.h;
+      if (player.prevY >= top - 3 && player.y <= top + 7 && overlapX(player.x, o)) {
+        o.dead = true;
+        player.vy = 250;
+        player.y = top;
+        state.bonus += STOMP_POINTS;
+        puffAt(o.x + 4, top, "#f0d060");
+        tone(220, 0.08, "square", 0.04);
+        continue;
+      }
+    }
+    if (o.type === "spike" || enemy) {
+      if (hit(box, hazardBox(o))) { die(); return; }
+    }
+    if (o.type === "coin" && hit(box, o)) {
+      o.got = true;
+      grantCoin(o.x, o.y);
+    }
+    if (o.type === "pole" && player.x > o.x - 6 && player.x < o.x + 16 && player.y < o.h) {
+      beginClear();
+      return;
+    }
+  }
+}
+
+function updatePlay(dt) {
+  const g = sceneGrav();
+
+  // Letting go mid-rise turns a high jump into a short hop.
+  if (player.wasHolding && !holding && player.vy > 40) player.vy *= HOP_CUT;
+  player.wasHolding = holding;
+
   if (state.jumpBuffer > 0) {
     state.jumpBuffer -= dt;
     if (player.onGround) {
-      player.vy = JUMP_V;
+      player.vy = g.jump;
       player.onGround = false;
       state.jumpBuffer = 0;
       state.hasJumped = true;
-      beep(660, 0.07, "square", 0.04);
+      tone(640, 0.07, "square", 0.04);
     }
   }
 
-  player.x += speed * dt;
-  player.vy -= GRAVITY * dt;
+  player.prevY = player.y;
+  player.x += runSpeed() * dt;
+  resolveWalls();
+  if (state.mode !== "play") return;
+
+  const rising = player.vy > 0;
+  const grav = (holding && rising) ? g.hold : g.fall;
+  player.vy -= grav * dt;
+  if (player.vy < -480) player.vy = -480;
   player.y += player.vy * dt;
 
-  if (player.y <= 0) {
-    player.y = 0;
-    player.vy = 0;
-    player.onGround = true;
-  } else {
-    player.onGround = false;
-  }
+  let grounded = false;
+  if (player.vy <= 0 && tryLand()) grounded = true;
+  if (!grounded && player.vy > 0) tryBump();
 
-  if (player.onGround) {
-    state.stepAcc += speed * dt;
-    if (state.stepAcc >= 18) {
-      state.stepAcc = 0;
-      puff();
-    }
-  }
-
-  const box = playerBox();
-
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (o.type !== "question" || o.gone) continue;
-    if (!overlap(box, o)) continue;
-    o.gone = true;
-    state.bonus += 50;
-    spark(o);
-    beep(900, 0.07, "square", 0.04);
-  }
-
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (o.type === "question" || o.gone) continue;
-    if (overlap(box, solidBox(o))) {
+  if (!grounded) {
+    if (!pitUnder(player.x) && player.y <= 0 && player.vy <= 0) {
+      player.y = 0;
+      player.vy = 0;
+      player.onGround = true;
+      grounded = true;
+    } else if (player.y < -36) {
       die();
       return;
+    } else {
+      player.onGround = false;
     }
+  }
+
+  if (state.mode !== "play") return;
+  touchHazards();
+  if (state.mode !== "play") return;
+
+  if (player.onGround) {
+    state.stepAcc = (state.stepAcc || 0) + runSpeed() * dt;
+    if (state.stepAcc > 16) {
+      state.stepAcc = 0;
+      particles.push({
+        x: player.x - 6, y: player.y + 1,
+        vx: -20, vy: 12, life: 0.25, max: 0.25,
+        color: sceneDef().groundDark, s: 2
+      });
+    }
+  }
+
+  // Bubbles in the lagoon.
+  if (sceneDef().id === "lagoon" && Math.random() < 0.08) {
+    particles.push({
+      x: cameraX + Math.random() * viewW,
+      y: 4 + Math.random() * 20,
+      vx: 4, vy: 28 + Math.random() * 20,
+      life: 1.2, max: 1.2,
+      color: "rgba(220,255,250,0.9)", s: 2, bubble: true
+    });
   }
 
   noteScore();
 }
 
 function update(dt) {
-  updateParticles(dt);
+  moveActors(dt);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (!p.bubble) p.vy -= 40 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  if (state.bannerT > 0) state.bannerT -= dt;
 
   if (state.mode === "dead") {
     state.deadFor += dt;
-    if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 2.4);
+    if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 2.2);
     return;
   }
-
-  if (state.mode === "title") {
-    // Drift the background so the title screen is not frozen.
-    state.preview += dt * 32;
+  if (state.mode === "clear") {
+    state.clearFor += dt;
+    if (player.y > 0) player.y = Math.max(0, player.y - 50 * dt);
+    if (state.clearFor > 1.65) advanceScene();
     return;
   }
+  if (state.mode === "title") return;
 
-  // Several small steps per frame, so a fast jump cannot skip a thin block.
-  const speed = runSpeed();
   const slices = Math.max(1, Math.ceil(dt / 0.016));
   const step = dt / slices;
   for (let i = 0; i < slices; i++) {
     if (state.mode !== "play") return;
-    stepPlay(step, speed);
+    updatePlay(step);
   }
-
   cameraX = player.x - viewW * FOCUS;
   spawnAhead();
   prune();
@@ -798,17 +1136,26 @@ function update(dt) {
 function resetRun() {
   player.x = START_X;
   player.y = 0;
+  player.prevY = 0;
   player.vy = 0;
   player.onGround = true;
+  player.wasHolding = false;
+  holding = false;
+  state.sceneIndex = 0;
+  state.levelStartX = START_X;
+  state.goalSpawned = false;
   state.score = 0;
   state.bonus = 0;
-  state.bestAtStart = state.best;
+  state.coins = 0;
   state.jumpBuffer = 0;
-  state.cursor = START_X + 240;
+  state.cursor = START_X + 180;
   state.patternCount = 0;
   state.deadFor = 0;
+  state.clearFor = 0;
   state.shake = 0;
+  state.bannerT = 2.6;
   state.stepAcc = 0;
+  state.bestAtStart = state.best;
   obstacles.length = 0;
   particles.length = 0;
   cameraX = player.x - viewW * FOCUS;
@@ -817,16 +1164,11 @@ function resetRun() {
 
 // ============================================================
 // DRAWING
-// We paint a small picture (one game pixel = one pixel), then
-// stretch it over the real screen with smoothing turned off.
-// That is what keeps the pixels chunky.
 // ============================================================
 
 function horizon() {
-  // On a tall phone, keep Cruzio up out of the thumb zone
-  // and let the dirt fill the bottom of the screen.
   const tall = viewH > viewW * 1.15;
-  return Math.round(viewH * (tall ? 0.64 : 0.74));
+  return Math.round(viewH * (tall ? 0.62 : 0.74));
 }
 
 function drawSprite(rows, dx, dy, colorOf) {
@@ -842,12 +1184,10 @@ function drawSprite(rows, dx, dy, colorOf) {
 }
 
 function drawCruzio(rows, x, y) {
-  // Draw the shape in ink, shifted 1 pixel, then the colors on top.
-  // The leftover ink is an outline. Dots stay empty.
   const shifts = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (let i = 0; i < shifts.length; i++) {
     drawSprite(rows, x + shifts[i][0], y + shifts[i][1], function (ch) {
-      return ch === "." ? null : PAL.ink;
+      return ch === "." ? null : sceneDef().ink;
     });
   }
   drawSprite(rows, x, y, cruzioColor);
@@ -858,21 +1198,13 @@ function drawText(text, x, y, scale, color) {
   ctx.fillStyle = color;
   let cx = x;
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === " ") {
-      cx += 3 * scale;
-      continue;
-    }
+    if (s[i] === " ") { cx += 3 * scale; continue; }
     const rows = glyphRows(s[i]);
-    if (!rows) {
-      cx += 4 * scale;
-      continue;
-    }
+    if (!rows) { cx += 4 * scale; continue; }
     const gw = rows[0].length;
     for (let r = 0; r < rows.length; r++) {
       for (let c = 0; c < gw; c++) {
-        if (rows[r][c] === "1") {
-          ctx.fillRect(cx + c * scale, y + r * scale, scale, scale);
-        }
+        if (rows[r][c] === "1") ctx.fillRect(cx + c * scale, y + r * scale, scale, scale);
       }
     }
     cx += gw * scale + scale;
@@ -880,27 +1212,352 @@ function drawText(text, x, y, scale, color) {
 }
 
 function drawLabel(text, x, y, scale) {
-  drawText(text, x - 1, y, scale, PAL.paper);
-  drawText(text, x + 1, y, scale, PAL.paper);
-  drawText(text, x, y - 1, scale, PAL.paper);
-  drawText(text, x, y + 1, scale, PAL.paper);
-  drawText(text, x, y, scale, PAL.ink);
+  const paper = sceneDef().id === "night" ? "#1a1840" : "#f7fbff";
+  drawText(text, x - 1, y, scale, paper);
+  drawText(text, x + 1, y, scale, paper);
+  drawText(text, x, y - 1, scale, paper);
+  drawText(text, x, y + 1, scale, paper);
+  drawText(text, x, y, scale, sceneDef().ink);
+}
+
+function fillDisk(cx, cy, r, color, clipBottom) {
+  ctx.fillStyle = color;
+  const limit = clipBottom == null ? r : clipBottom;
+  for (let dy = -r; dy <= limit; dy++) {
+    const hw = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
+    ctx.fillRect(cx - hw, cy + dy, hw * 2 + 1, 1);
+  }
+}
+
+function worldY(feetUp) {
+  return horizon() - feetUp;
+}
+
+function drawGround(cam) {
+  const sc = sceneDef();
+  const gy = horizon();
+  ctx.fillStyle = sc.ground;
+  ctx.fillRect(0, gy, viewW, viewH - gy);
+  ctx.fillStyle = sc.groundDark;
+  ctx.fillRect(0, gy + 14, viewW, 3);
+  ctx.fillStyle = sc.grass;
+  ctx.fillRect(0, gy, viewW, 4);
+  ctx.fillStyle = sc.grassDark;
+  ctx.fillRect(0, gy + 4, viewW, 2);
+
+  // Pits cut a hole through the floor.
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.type !== "pit") continue;
+    const x = Math.round(o.x - cam);
+    ctx.fillStyle = sc.sky;
+    if (sc.id === "lagoon") ctx.fillStyle = "#0c3c50";
+    if (sc.id === "night") ctx.fillStyle = "#07060f";
+    if (sc.id === "canopy") ctx.fillStyle = "#102010";
+    ctx.fillRect(x, gy, o.w, viewH - gy);
+  }
+
+  const period = 20;
+  const shift = Math.floor(cam) % period;
+  for (let x = -shift; x < viewW; x += period) {
+    ctx.fillStyle = sc.grassDark;
+    ctx.fillRect(x + 6, gy + 1, 2, 2);
+    ctx.fillStyle = sc.groundDark;
+    ctx.fillRect(x + 3, gy + 20, 3, 2);
+  }
+}
+
+function drawBackdrop(cam) {
+  const sc = sceneDef();
+  const gy = horizon();
+  ctx.fillStyle = sc.sky;
+  ctx.fillRect(0, 0, viewW, viewH);
+
+  if (sc.id === "night") {
+    ctx.fillStyle = sc.accent;
+    fillDisk(viewW - 36, 28, 10, sc.accent);
+    ctx.fillStyle = sc.sky;
+    fillDisk(viewW - 32, 26, 8, sc.sky);
+    ctx.fillStyle = "#f4f0e8";
+    for (let i = 0; i < 12; i++) {
+      const sx = (i * 47 + Math.floor(cam * 0.02)) % viewW;
+      ctx.fillRect(sx, 12 + (i * 17) % 40, 1, 1);
+    }
+  }
+
+  if (sc.id === "lagoon") {
+    // Soft bands so the water reads as water.
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    for (let y = 20; y < gy; y += 14) ctx.fillRect(0, y, viewW, 2);
+  }
+
+  if (sc.id === "lagoon") {
+    // Coral silhouettes along the floor of the lagoon.
+    const shift = Math.floor(cam * 0.3) % 70;
+    ctx.fillStyle = sc.hill;
+    for (let i = -1; i < 12; i++) {
+      const x = i * 70 - shift;
+      ctx.fillRect(x + 10, gy - 18, 4, 18);
+      ctx.fillRect(x, gy - 12, 8, 4);
+      ctx.fillRect(x + 16, gy - 16, 6, 4);
+    }
+  } else if (sc.id !== "cloudway") {
+    const shift = (cam * 0.25) % 400;
+    for (let i = -1; i < 6; i++) {
+      const hx = i * 90 - shift;
+      const hr = sc.id === "night" ? 18 : 26;
+      ctx.fillStyle = sc.hillFar;
+      for (let rise = 0; rise < hr; rise++) {
+        const half = Math.round(Math.sqrt(Math.max(0, hr * hr - rise * rise)));
+        ctx.fillRect(Math.round(hx - half), gy - 1 - rise, half * 2, 1);
+      }
+    }
+  }
+
+  if (sc.id !== "lagoon") {
+    const cloudShift = (cam * 0.15) % 360;
+    for (let i = 0; i < 5; i++) {
+      const cx = i * 110 - cloudShift;
+      const cy = 18 + (i % 3) * 16;
+      fillDisk(cx, cy, 10, sc.cloud, 2);
+      fillDisk(cx + 10, cy + 2, 7, sc.cloud, 2);
+      ctx.fillStyle = sc.cloudShade;
+      ctx.fillRect(cx - 8, cy + 2, 16, 1);
+    }
+  }
+}
+
+function drawPipe(o, x, top) {
+  const sc = sceneDef();
+  const capH = 6;
+  const lip = 2;
+  ctx.fillStyle = sc.pipe;
+  ctx.fillRect(x + lip, top + capH, o.w - lip * 2, o.h - capH);
+  ctx.fillStyle = sc.pipeLite;
+  ctx.fillRect(x + lip, top + capH, 3, o.h - capH);
+  ctx.fillStyle = sc.pipeDark;
+  ctx.fillRect(x + o.w - lip - 3, top + capH, 3, o.h - capH);
+  ctx.fillStyle = sc.pipe;
+  ctx.fillRect(x, top, o.w, capH);
+  ctx.fillStyle = sc.pipeDark;
+  ctx.fillRect(x, top, o.w, 2);
+  ctx.fillRect(x, top + capH - 2, o.w, 2);
+}
+
+function drawTrunk(o, x, top) {
+  const sc = sceneDef();
+  ctx.fillStyle = sc.pipeDark;
+  ctx.fillRect(x, top, o.w, o.h);
+  ctx.fillStyle = sc.pipeLite;
+  ctx.fillRect(x, top, 3, o.h);
+  // Grassy cap.
+  ctx.fillStyle = sc.grass;
+  fillDisk(x + Math.floor(o.w / 2), top + 2, Math.floor(o.w / 2) + 4, sc.grass, 3);
+  ctx.fillStyle = sc.grassDark;
+  ctx.fillRect(x - 2, top + 2, o.w + 4, 2);
+}
+
+function drawBlock(o, x, top) {
+  const sc = sceneDef();
+  if (o.cloud) {
+    fillDisk(x + o.w / 2, top + 6, 14, sc.cloud, 4);
+    ctx.fillStyle = sc.cloudShade;
+    ctx.fillRect(x, top + o.h - 3, o.w, 3);
+    return;
+  }
+  if (o.shroom) {
+    const mid = x + Math.floor(o.w / 2);
+    fillDisk(mid, top + 8, Math.floor(o.w / 2) - 2, sc.brick, 6);
+    ctx.fillStyle = sc.accent;
+    fillDisk(mid - 16, top + 6, 4, sc.accent);
+    fillDisk(mid + 14, top + 5, 3, sc.accent);
+    fillDisk(mid, top + 3, 3, sc.accent);
+    return;
+  }
+  ctx.fillStyle = sc.mortar;
+  ctx.fillRect(x, top, o.w, o.h);
+  ctx.fillStyle = sc.brick;
+  ctx.fillRect(x + 1, top + 1, o.w - 2, o.h - 2);
+  ctx.fillStyle = sc.brickLite;
+  ctx.fillRect(x + 1, top + 1, o.w - 2, 1);
+  ctx.fillStyle = sc.ink;
+  ctx.fillRect(x, top, o.w, 1);
+  ctx.fillRect(x, top, 1, o.h);
+}
+
+function drawQ(o, x, top) {
+  const sc = sceneDef();
+  ctx.fillStyle = o.used ? sc.groundDark : sc.brick;
+  ctx.fillRect(x, top, 16, 16);
+  ctx.fillStyle = o.used ? sc.ground : "#f2c14e";
+  ctx.fillRect(x + 2, top + 2, 12, 12);
+  if (o.used) return;
+  ctx.fillStyle = "#5c3410";
+  const mark = ["01110", "10001", "00010", "00100", "00000", "00100"];
+  for (let r = 0; r < mark.length; r++) {
+    for (let c = 0; c < 5; c++) {
+      if (mark[r][c] === "1") ctx.fillRect(x + 5 + c, top + 4 + r, 1, 1);
+    }
+  }
+}
+
+function drawSpike(o, x) {
+  const base = worldY(o.y);
+  for (let i = 0; i < o.h; i++) {
+    const y = base - 1 - i;
+    const half = Math.max(1, Math.round((o.w / 2) * (1 - i / o.h)));
+    const cx = x + o.w / 2;
+    ctx.fillStyle = "#dfe6ee";
+    ctx.fillRect(Math.round(cx - half), y, half * 2, 1);
+    ctx.fillStyle = "#2a3038";
+    ctx.fillRect(Math.round(cx + half - 1), y, 1, 1);
+  }
+}
+
+function drawCoin(o, x) {
+  if (o.got) return;
+  const y = worldY(o.y + o.h) ;
+  fillDisk(x + 5, y + 5, 4, "#f2c14e");
+  ctx.fillStyle = "#a56a18";
+  ctx.fillRect(x + 4, y + 3, 2, 4);
+}
+
+function drawPole(o, x) {
+  const top = worldY(o.h);
+  const base = worldY(0);
+  ctx.fillStyle = "#f4f7fb";
+  ctx.fillRect(x + 3, top, 2, base - top);
+  ctx.fillStyle = "#e23b3b";
+  ctx.beginPath();
+  // Triangle pennant, original, not a copied flag.
+  ctx.fillRect(x + 5, top + 2, 10, 2);
+  ctx.fillRect(x + 5, top + 4, 8, 2);
+  ctx.fillRect(x + 5, top + 6, 6, 2);
+  ctx.fillRect(x + 5, top + 8, 3, 2);
+}
+
+function drawDeco(o, x) {
+  const sc = sceneDef();
+  const top = worldY(o.y + o.h);
+  ctx.fillStyle = sc.accent;
+  ctx.fillRect(x + 4, top, 4, o.h);
+  ctx.fillRect(x, top + 4, 6, 3);
+  ctx.fillRect(x + 8, top + 8, 6, 3);
+}
+
+function drawObstacles(cam) {
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.dead || o.got) continue;
+    const x = Math.round(o.x - cam);
+    if (x > viewW + 40 || x + (o.w || 10) < -40) continue;
+    const top = worldY((o.y || 0) + (o.h || 0));
+    if (o.type === "pipe" || (o.type === "pillar" && !o.stem)) {
+      if (o.stem) {
+        const sc = sceneDef();
+        ctx.fillStyle = sc.pipe;
+        ctx.fillRect(x, worldY(o.h), o.w, o.h);
+        ctx.fillStyle = sc.pipeLite;
+        ctx.fillRect(x, worldY(o.h), 3, o.h);
+      } else drawPipe(o, x, top);
+    } else if (o.type === "trunk") drawTrunk(o, x, top);
+    else if (o.type === "pillar") drawPipe(o, x, top);
+    else if (o.type === "block") drawBlock(o, x, top);
+    else if (o.type === "q") drawQ(o, x, top);
+    else if (o.type === "spike") drawSpike(o, x);
+    else if (o.type === "coin") drawCoin(o, x);
+    else if (o.type === "pole") drawPole(o, x);
+    else if (o.type === "deco") drawDeco(o, x);
+    else if (o.type === "bug") {
+      drawSprite(BUG_SPRITE, x, worldY(o.y + BUG_SPRITE.length), bugColor);
+    } else if (o.type === "fish") {
+      drawSprite(FISH_SPRITE, x, worldY(o.y + FISH_SPRITE.length), fishColor);
+    } else if (o.type === "glider") {
+      const bob = Math.floor(performance.now() / 180) % 2;
+      drawSprite(GLIDER_SPRITE, x, worldY(o.y + GLIDER_SPRITE.length) + bob, gliderColor);
+    }
+  }
+}
+
+function drawHero(cam) {
+  const rows = !player.onGround ? SPRITE.jump : (Math.floor(player.x / 10) % 2 === 0 ? SPRITE.runA : SPRITE.runB);
+  const destX = Math.round(player.x - cam - rows[0].length / 2);
+  const destY = Math.round(worldY(player.y) - rows.length);
+  if (state.mode === "dead" && Math.floor(state.deadFor * 12) % 2 === 0) return;
+  const gy = worldY(player.y);
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = sceneDef().ink;
+  ctx.fillRect(destX + 3, Math.min(gy, horizon()) - 2, 8, 2);
+  ctx.globalAlpha = 1;
+  drawCruzio(rows, destX, destY);
+}
+
+function drawParticles(cam) {
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.color;
+    const x = Math.round(p.x - cam);
+    const y = Math.round(worldY(p.y) - p.s);
+    if (p.coin) fillDisk(x, y, 3, "#f2c14e");
+    else if (p.bubble) {
+      ctx.strokeStyle = p.color;
+      fillDisk(x, y, p.s, "rgba(255,255,255,0.35)");
+    } else ctx.fillRect(x, y, p.s, p.s);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function hudTop() {
+  return Math.round(50 * (viewH / Math.max(1, cssH)) + 4);
+}
+
+function drawHud() {
+  if (state.mode === "title" || state.mode === "clear") return;
+  const sc = sceneDef();
+  const y = hudTop();
+  const scale = 2;
+  const score = "SCORE " + state.score;
+  const best = "BEST " + state.best;
+  const coin = "COIN " + state.coins;
+  drawLabel(score, viewW - 8 - textWidth(score, scale), y, scale);
+  drawLabel(best, viewW - 8 - textWidth(best, scale), y + scale * 5 + 4, scale);
+  drawLabel(coin, 8, y, scale);
+  if (state.mode === "play" && !state.hasJumped) {
+    const hint = "HOLD TO JUMP";
+    drawLabel(hint, Math.round((viewW - textWidth(hint, 2)) / 2), horizon() - 64, 2);
+  }
+  if (sc) { /* scene name is on the banner */ }
 }
 
 function drawPanel(x, y, w, h) {
-  ctx.fillStyle = PAL.paper;
+  ctx.fillStyle = "#f7fbff";
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = PAL.ink;
+  ctx.fillStyle = "#142033";
   ctx.fillRect(x, y, w, 2);
   ctx.fillRect(x, y + h - 2, w, 2);
   ctx.fillRect(x, y, 2, h);
   ctx.fillRect(x + w - 2, y, 2, h);
 }
 
+function drawGate(cx, gy) {
+  // A small original gate: two towers, a door, a pennant.
+  ctx.fillStyle = "#5a5e78";
+  ctx.fillRect(cx - 22, gy - 28, 10, 28);
+  ctx.fillRect(cx + 12, gy - 28, 10, 28);
+  ctx.fillRect(cx - 22, gy - 32, 44, 6);
+  ctx.fillStyle = "#2e3248";
+  ctx.fillRect(cx - 6, gy - 16, 12, 16);
+  ctx.fillStyle = "#e23b3b";
+  ctx.fillRect(cx + 16, gy - 40, 2, 10);
+  ctx.fillRect(cx + 18, gy - 40, 8, 2);
+  ctx.fillRect(cx + 18, gy - 38, 6, 2);
+}
+
 function drawMessage(lines) {
   const gap = 6;
-  let blockH = 0;
   let blockW = 0;
+  let blockH = 0;
   const widths = [];
   for (let i = 0; i < lines.length; i++) {
     const w = textWidth(lines[i].text, lines[i].scale);
@@ -909,318 +1566,37 @@ function drawMessage(lines) {
     blockH += lines[i].scale * 5;
   }
   blockH += gap * (lines.length - 1);
-
-  const padX = 12;
-  const padY = 10;
-  const ground = horizon();
-  // Stay under the Home button, and above Cruzio's cap.
-  const buttonH = 44 * (viewH / Math.max(1, cssH));
-  const topLimit = Math.round(buttonH + 8);
-  let y = Math.round(ground * 0.22);
-  if (y < topLimit) y = topLimit;
-  const bottomLimit = ground - SPRITE_H - 18;
-  if (y + blockH + padY * 2 > bottomLimit) {
-    y = Math.max(topLimit, bottomLimit - blockH - padY * 2);
+  const pad = 10;
+  let s = 1;
+  while (s === 1 && blockW + pad * 2 > viewW - 8) {
+    // Shrink by asking callers to use small scales. Clamp the panel.
+    break;
   }
-
-  const x = Math.round((viewW - blockW) / 2) - padX;
-  drawPanel(x, y - padY, blockW + padX * 2, blockH + padY * 2);
-
+  const x = Math.round((viewW - blockW) / 2) - pad;
+  const y = Math.round(horizon() * 0.22);
+  drawPanel(x, y - pad, blockW + pad * 2, blockH + pad * 2);
   let cy = y;
   for (let i = 0; i < lines.length; i++) {
-    const lx = Math.round((viewW - widths[i]) / 2);
-    drawText(lines[i].text, lx, cy, lines[i].scale, PAL.ink);
+    drawText(lines[i].text, Math.round((viewW - widths[i]) / 2), cy, lines[i].scale, "#142033");
     cy += lines[i].scale * 5 + gap;
   }
 }
 
-function fillPuff(cx, cy, r, color) {
-  ctx.fillStyle = color;
-  for (let dy = -r; dy <= 2; dy++) {
-    const hw = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-    ctx.fillRect(cx - hw, cy + dy, hw * 2 + 1, 1);
-  }
-}
-
-function drawCloud(x, y, kind) {
-  const sets = [
-    [[0, 0, 9], [-8, 2, 6], [8, 1, 6]],
-    [[0, 0, 12], [-12, 3, 7], [11, 2, 7], [0, -4, 6]],
-    [[0, 1, 7], [6, 0, 5], [-7, 2, 5]]
-  ];
-  const blobs = sets[kind];
-  for (let i = 0; i < blobs.length; i++) {
-    fillPuff(x + blobs[i][0], y + blobs[i][1], blobs[i][2], PAL.cloud);
-  }
-  ctx.fillStyle = PAL.cloudShade;
-  ctx.fillRect(x - 8, y + 2, 16, 1);
-}
-
-function drawDome(cx, base, radius, fill, shade) {
-  for (let rise = 0; rise < radius; rise++) {
-    const half = Math.round(Math.sqrt(Math.max(0, radius * radius - rise * rise)));
-    if (half <= 0) continue;
-    const y = base - 1 - rise;
-    ctx.fillStyle = fill;
-    ctx.fillRect(Math.round(cx - half), y, half * 2, 1);
-    ctx.fillStyle = shade;
-    ctx.fillRect(Math.round(cx + half - 2), y, 2, 1);
-  }
-}
-
-function drawHills(list, cam, factor, fill, shade) {
-  const ground = horizon();
-  const shift = (cam * factor) % LOOP;
-  for (let copy = -1; copy <= 1; copy++) {
-    for (let i = 0; i < list.length; i++) {
-      const h = list[i];
-      const x = h.x - shift + copy * LOOP;
-      if (x < -h.r - 4 || x > viewW + h.r + 4) continue;
-      drawDome(x, ground, h.r, fill, shade);
-    }
-  }
-}
-
-function drawGround(cam) {
-  const gy = horizon();
-  const dirtH = viewH - gy;
-  ctx.fillStyle = PAL.dirt;
-  ctx.fillRect(0, gy, viewW, dirtH);
-
-  // Darker bands so a tall phone's dirt does not look like a flat block.
-  ctx.fillStyle = PAL.dirtDark;
-  ctx.fillRect(0, gy + 16, viewW, 3);
-  if (dirtH > 40) {
-    ctx.fillStyle = PAL.dirtDeep;
-    ctx.fillRect(0, gy + 34, viewW, 4);
-  }
-
-  ctx.fillStyle = PAL.grass;
-  ctx.fillRect(0, gy, viewW, 4);
-  ctx.fillStyle = PAL.grassDark;
-  ctx.fillRect(0, gy + 4, viewW, 2);
-
-  const period = 20;
-  const shift = Math.floor(cam) % period;
-  for (let x = -shift; x < viewW; x += period) {
-    ctx.fillStyle = PAL.grassDark;
-    ctx.fillRect(x + 6, gy + 1, 2, 2);
-    ctx.fillStyle = PAL.dirtDark;
-    ctx.fillRect(x + 3, gy + 20, 4, 3);
-    ctx.fillRect(x + 12, gy + 28, 3, 2);
-    if (gy + 42 < viewH) {
-      ctx.fillStyle = PAL.dirtLite;
-      ctx.fillRect(x + 8, gy + 42, 5, 2);
-    }
-    if (gy + 58 < viewH) {
-      ctx.fillStyle = PAL.dirtDeep;
-      ctx.fillRect(x + 15, gy + 58, 3, 3);
-    }
-  }
-}
-
-function drawSpike(o, cam) {
-  const ground = horizon();
-  const x = Math.round(o.x - cam);
-  const base = Math.round(ground - o.y);
-  for (let i = 0; i < o.h; i++) {
-    const y = base - 1 - i;
-    const half = Math.max(1, Math.round((o.w / 2) * (1 - i / o.h)));
-    const cx = x + o.w / 2;
-    ctx.fillStyle = PAL.spike;
-    ctx.fillRect(Math.round(cx - half), y, half * 2, 1);
-    ctx.fillStyle = PAL.spikeLite;
-    ctx.fillRect(Math.round(cx - half), y, 1, 1);
-    ctx.fillStyle = PAL.spikeEdge;
-    ctx.fillRect(Math.round(cx + half - 1), y, 1, 1);
-  }
-}
-
-function drawPipe(o, cam) {
-  const ground = horizon();
-  const x = Math.round(o.x - cam);
-  const top = Math.round(ground - (o.y + o.h));
-  const capH = 8;
-  const lip = 3;
-  const bodyX = x + lip;
-  const bodyW = o.w - lip * 2;
-  const bodyY = top + capH;
-  const bodyH = o.h - capH;
-
-  ctx.fillStyle = PAL.pipe;
-  ctx.fillRect(bodyX, bodyY, bodyW, bodyH);
-  ctx.fillStyle = PAL.pipeLite;
-  ctx.fillRect(bodyX, bodyY, 3, bodyH);
-  ctx.fillStyle = PAL.pipeDark;
-  ctx.fillRect(bodyX + bodyW - 4, bodyY, 4, bodyH);
-  ctx.fillRect(bodyX, bodyY + Math.floor(bodyH * 0.45), bodyW, 2);
-
-  ctx.fillStyle = PAL.pipe;
-  ctx.fillRect(x, top, o.w, capH);
-  ctx.fillStyle = PAL.pipeLite;
-  ctx.fillRect(x, top, 3, capH);
-  ctx.fillStyle = PAL.pipeDark;
-  ctx.fillRect(x + o.w - 4, top, 4, capH);
-  ctx.fillStyle = PAL.pipeRim;
-  ctx.fillRect(x, top, o.w, 2);
-  ctx.fillRect(x, top + capH - 2, o.w, 2);
-}
-
-function drawBricks(o, cam) {
-  const ground = horizon();
-  const x0 = Math.round(o.x - cam);
-  const yTop = Math.round(ground - (o.y + o.h));
-  const tile = 16;
-  for (let row = 0, py = yTop; py < yTop + o.h; row++, py += tile) {
-    const offset = (row % 2) * 8;
-    for (let px = x0 - tile + offset; px < x0 + o.w; px += tile) {
-      const left = Math.max(px, x0);
-      const right = Math.min(px + tile, x0 + o.w);
-      const top = py;
-      const bot = Math.min(py + tile, yTop + o.h);
-      if (right <= left || bot <= top) continue;
-      ctx.fillStyle = PAL.mortar;
-      ctx.fillRect(left, top, right - left, bot - top);
-      const insetL = left + (left === px ? 1 : 0);
-      const insetT = top + (top === py ? 1 : 0);
-      const insetR = right - (right === px + tile ? 1 : 0);
-      const insetB = bot - (bot === py + tile ? 1 : 0);
-      if (insetR <= insetL || insetB <= insetT) continue;
-      ctx.fillStyle = PAL.brick;
-      ctx.fillRect(insetL, insetT, insetR - insetL, insetB - insetT);
-      ctx.fillStyle = PAL.brickLite;
-      ctx.fillRect(insetL, insetT, insetR - insetL, 1);
-    }
-  }
-  ctx.fillStyle = PAL.ink;
-  ctx.fillRect(x0, yTop, o.w, 1);
-  ctx.fillRect(x0, yTop, 1, o.h);
-  ctx.fillRect(x0 + o.w - 1, yTop, 1, o.h);
-  ctx.fillRect(x0, yTop + o.h - 1, o.w, 1);
-}
-
-function drawQuestion(o, cam) {
-  const ground = horizon();
-  const x = Math.round(o.x - cam);
-  const y = Math.round(ground - (o.y + o.h));
-  const blink = Math.floor(performance.now() / 280) % 2 === 0;
-
-  ctx.fillStyle = PAL.qDark;
-  ctx.fillRect(x, y, 16, 16);
-  ctx.fillStyle = PAL.q;
-  ctx.fillRect(x + 2, y + 2, 12, 12);
-  ctx.fillStyle = PAL.qLite;
-  ctx.fillRect(x + 2, y + 2, 12, 2);
-  ctx.fillRect(x + 2, y + 2, 2, 10);
-
-  // Hand-placed question mark. Two frames so the block twinkles.
-  const mark = blink
-    ? ["01110", "10001", "00010", "00100", "00000", "00100"]
-    : ["01110", "10001", "00010", "00100", "00000", "00100"];
-  ctx.fillStyle = blink ? PAL.qMark : "#7a4a16";
-  for (let r = 0; r < mark.length; r++) {
-    for (let c = 0; c < mark[r].length; c++) {
-      if (mark[r][c] === "1") ctx.fillRect(x + 5 + c, y + 4 + r, 1, 1);
-    }
-  }
-  if (blink) {
-    ctx.fillStyle = PAL.white;
-    ctx.fillRect(x + 4, y + 4, 2, 2);
-  }
-}
-
-function drawObstacles(cam) {
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (o.gone) continue;
-    if (o.x + o.w < cam - 8 || o.x > cam + viewW + 8) continue;
-    if (o.type === "spike") drawSpike(o, cam);
-    else if (o.type === "pipe") drawPipe(o, cam);
-    else if (o.type === "brick") drawBricks(o, cam);
-    else if (o.type === "question") drawQuestion(o, cam);
-  }
-}
-
-function drawParticles(cam) {
-  const ground = horizon();
-  for (let i = 0; i < particles.length; i++) {
-    const p = particles[i];
-    ctx.globalAlpha = Math.max(0, p.life / p.max);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(Math.round(p.x - cam), Math.round(ground - p.y - p.s), p.s, p.s);
-  }
-  ctx.globalAlpha = 1;
-}
-
-function heroFrame(worldX, onGround) {
-  if (!onGround) return SPRITE.jump;
-  return Math.floor(worldX / 10) % 2 === 0 ? SPRITE.runA : SPRITE.runB;
-}
-
-function drawHero(cam, worldX, feetY, onGround) {
-  const rows = heroFrame(worldX, onGround);
-  const destX = Math.round(worldX - cam - rows[0].length / 2);
-  const destY = Math.round(horizon() - feetY - rows.length);
-  const ground = horizon();
-
-  const lift = Math.min(1, feetY / 70);
-  const sw = Math.max(4, Math.round(12 - lift * 5));
-  ctx.globalAlpha = 0.35 - lift * 0.15;
-  ctx.fillStyle = "#16341f";
-  ctx.fillRect(Math.round(worldX - cam - sw / 2), ground - 2, sw, 2);
-  ctx.globalAlpha = 1;
-
-  if (state.mode === "dead" && !reduceMotion) {
-    // Blink the hero off and on right after a crash.
-    if (Math.floor(state.deadFor * 14) % 2 === 0) return;
-  }
-  drawCruzio(rows, destX, destY);
-}
-
-function safeRight() {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--sar");
-  const px = parseFloat(raw);
-  if (!Number.isFinite(px)) return 0;
-  return px * (viewW / Math.max(1, cssW));
-}
-
-function safeTop() {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--sat");
-  const px = parseFloat(raw);
-  if (!Number.isFinite(px)) return 0;
-  return px * (viewH / Math.max(1, cssH));
-}
-
-function drawHud() {
-  if (state.mode !== "play") return;
-  const scale = viewW < 240 ? 2 : 2;
-  const right = viewW - Math.round(8 + safeRight());
-  const y = Math.round(8 + safeTop());
-  const best = "BEST " + state.best;
-  const score = "SCORE " + state.score;
-  drawLabel(best, right - textWidth(best, scale), y, scale);
-  drawLabel(score, right - textWidth(score, scale), y + scale * 5 + 5, scale);
-
-  if (!state.hasJumped) {
-    const hint = "TAP TO JUMP";
-    const hw = textWidth(hint, 2);
-    const bob = reduceMotion ? 0 : Math.floor(performance.now() / 260) % 2;
-    drawLabel(hint, Math.round((viewW - hw) / 2), horizon() - 70 + bob, 2);
-  }
-}
-
-function titleScale() {
-  // Shrink until the widest title fits the screen, portrait included.
-  let s = viewH < 190 ? 2 : viewW > 360 ? 4 : 3;
-  while (s > 1 && textWidth("CRUZIO DASH", s) > viewW - 36) s -= 1;
-  return s;
+function drawBanner() {
+  if (state.bannerT <= 0 || state.mode === "title" || state.mode === "dead") return;
+  const sc = sceneDef();
+  const title = stageNumber() + " " + sc.name;
+  const scale = textWidth(title, 2) < viewW - 16 ? 2 : 1;
+  // Keep the name under the score, above the jumps, so it does not cover Cruzio.
+  const y = hudTop() + scale * 5 + 8;
+  drawLabel(title, Math.round((viewW - textWidth(title, scale)) / 2), y, scale);
 }
 
 function drawOverlay() {
   if (state.mode === "title") {
     drawMessage([
-      { text: "CRUZIO DASH", scale: titleScale() },
-      { text: "TAP TO START", scale: 2 },
+      { text: "CRUZIO DASH", scale: viewW > 280 ? 3 : 2 },
+      { text: "HOLD TO JUMP", scale: 2 },
       { text: "BEST " + state.best, scale: 2 }
     ]);
     return;
@@ -1230,53 +1606,52 @@ function drawOverlay() {
     ctx.fillRect(0, 0, viewW, viewH);
     const record = state.score > state.bestAtStart;
     drawMessage([
-      { text: "GAME OVER", scale: titleScale() },
+      { text: "GAME OVER", scale: 2 },
       { text: "SCORE " + state.score, scale: 2 },
       { text: record ? "NEW BEST" : "BEST " + state.best, scale: 2 },
       { text: "TAP TO RETRY", scale: 2 }
+    ]);
+    return;
+  }
+  if (state.mode === "clear") {
+    ctx.fillStyle = "rgba(20, 32, 51, 0.35)";
+    ctx.fillRect(0, 0, viewW, viewH);
+    const next = SCENES[(state.sceneIndex + 1) % SCENES.length];
+    drawGate(Math.round(viewW / 2), Math.round(horizon() * 0.55));
+    drawMessage([
+      { text: "CLEAR", scale: 3 },
+      { text: "NEXT " + next.name, scale: 2 }
     ]);
   }
 }
 
 function render() {
-  const playing = state.mode !== "title";
-  const cam = playing ? cameraX : state.preview;
-  const heroX = playing ? player.x : cam + viewW * FOCUS;
-  const heroY = playing ? player.y : 0;
-  const onGround = playing ? player.onGround : true;
-
-  ctx.fillStyle = PAL.sky;
-  ctx.fillRect(0, 0, viewW, viewH);
-
-  const cloudShift = (cam * 0.18) % LOOP;
-  const ground = horizon();
-  for (let copy = -1; copy <= 1; copy++) {
-    for (let i = 0; i < clouds.length; i++) {
-      const c = clouds[i];
-      const x = c.x - cloudShift + copy * LOOP;
-      if (x < -30 || x > viewW + 30) continue;
-      drawCloud(Math.round(x), Math.round(ground * c.yFrac), c.kind);
-    }
+  const sc = sceneDef();
+  if (state.mode === "title") cameraX += 0; // scenery can sit still
+  const cam = state.mode === "title" ? (state.preview || 0) : cameraX;
+  if (state.mode === "title") {
+    player.x = cam + viewW * FOCUS;
+    player.y = 0;
+    player.onGround = true;
   }
 
-  drawHills(hillsFar, cam, 0.25, PAL.hillFar, PAL.hillFarShade);
-  drawHills(hillsNear, cam, 0.45, PAL.hillNear, PAL.hillNearShade);
+  drawBackdrop(cam);
   drawGround(cam);
-
-  if (playing) drawObstacles(cam);
-  drawHero(cam, heroX, heroY, onGround);
-  if (playing) drawParticles(cam);
+  if (state.mode !== "title") drawObstacles(cam);
+  drawHero(cam);
+  drawParticles(cam);
   drawHud();
+  drawBanner();
   drawOverlay();
 
+  if (!out) return;
   out.imageSmoothingEnabled = false;
-  out.fillStyle = PAL.sky;
+  out.fillStyle = sc.sky;
   out.fillRect(0, 0, canvas.width, canvas.height);
-
   let ox = 0;
   let oy = 0;
   if (state.shake > 0 && !reduceMotion) {
-    const mag = state.shake * 7 * (canvas.width / viewW);
+    const mag = state.shake * 6 * (canvas.width / viewW);
     ox = (Math.random() - 0.5) * mag;
     oy = (Math.random() - 0.5) * mag;
   }
@@ -1285,21 +1660,14 @@ function render() {
 
 // ============================================================
 // FIT THE SCREEN
-// The small picture's width and height change with the phone
-// so the canvas fills portrait and landscape with no scroll bars.
 // ============================================================
 
 function fitView(w, h) {
   const aspect = w / Math.max(1, h);
-  // Keep the world chunky. minW is how much road a tall phone can see.
-  // Lower minW = a bigger Cruzio, but less time to react.
-  const minW = 136;
-  const baseH = 156;
-  if (aspect < 1) {
-    return { viewW: minW, viewH: Math.max(baseH, Math.round(minW / aspect)) };
-  }
-  const vh = baseH;
-  return { viewW: Math.max(minW, Math.round(vh * aspect)), viewH: vh };
+  const minW = 150;
+  const baseH = 168;
+  if (aspect < 1) return { viewW: minW, viewH: Math.max(baseH, Math.round(minW / aspect)) };
+  return { viewW: Math.max(minW, Math.round(baseH * aspect)), viewH: baseH };
 }
 
 function viewportBox() {
@@ -1313,6 +1681,7 @@ function viewportBox() {
 }
 
 function resize() {
+  if (!canvas) return;
   const box = viewportBox();
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   cssW = box.w;
@@ -1323,19 +1692,16 @@ function resize() {
   canvas.style.top = box.y + "px";
   canvas.width = Math.max(1, Math.round(box.w * dpr));
   canvas.height = Math.max(1, Math.round(box.h * dpr));
-
   const view = fitView(box.w, box.h);
   viewW = view.viewW;
   viewH = view.viewH;
   buffer.width = viewW;
   buffer.height = viewH;
-
+  const slide = "translate(" + Math.round(box.x) + "px," + Math.round(box.y) + "px)";
   const home = document.getElementById("home");
-  if (home) {
-    // Slide with the visible area. CSS still adds the notch padding.
-    home.style.transform = "translate(" + Math.round(box.x) + "px," + Math.round(box.y) + "px)";
-  }
-
+  const muteBtn = document.getElementById("mute");
+  if (home) home.style.transform = slide;
+  if (muteBtn) muteBtn.style.transform = slide;
   if (state.mode === "play") {
     cameraX = player.x - viewW * FOCUS;
     spawnAhead();
@@ -1343,47 +1709,73 @@ function resize() {
   window.scrollTo(0, 0);
 }
 
-// ============================================================
-// LOOP
-// requestAnimationFrame calls tick once per screen refresh.
-// dt is the seconds since the last call, so the speed stays
-// the same on a 60Hz laptop and a 120Hz phone.
-// ============================================================
-
 function tick(now) {
   if (!lastTime) lastTime = now;
   let dt = (now - lastTime) / 1000;
   lastTime = now;
-  // A tab switch can report a huge gap. Cap it so Cruzio
-  // does not teleport through a pipe.
   if (dt > 0.05) dt = 0.05;
   if (dt < 0) dt = 0;
-
+  if (state.mode === "title") state.preview = (state.preview || 0) + dt * 24;
   update(dt);
   render();
   requestAnimationFrame(tick);
 }
 
-buildScenery();
-state.best = loadBest();
-state.bestAtStart = state.best;
-resize();
-window.addEventListener("resize", resize);
-window.addEventListener("orientationchange", function () {
-  // Phones report the new size a moment after the turn.
-  setTimeout(resize, 60);
-  setTimeout(resize, 280);
-});
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", resize);
-  window.visualViewport.addEventListener("scroll", resize);
+function boot() {
+  canvas = document.getElementById("game");
+  out = canvas.getContext("2d");
+  buffer = document.createElement("canvas");
+  ctx = buffer.getContext("2d");
+  reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  muted = loadMute();
+  paintMute();
+  try { state.best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; }
+  catch (err) { state.best = 0; }
+  state.bestAtStart = state.best;
+  bindInput();
+  resize();
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", function () {
+    setTimeout(resize, 60);
+    setTimeout(resize, 280);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", resize);
+    window.visualViewport.addEventListener("scroll", resize);
+  }
+  document.addEventListener("visibilitychange", function () {
+    lastTime = 0;
+    if (document.hidden) noteScore();
+  });
+  requestAnimationFrame(tick);
 }
-document.addEventListener("visibilitychange", function () {
-  lastTime = 0;
-  if (document.hidden) saveBest(state.best);
-});
-window.addEventListener("pagehide", function () {
-  saveBest(state.best);
-});
 
-requestAnimationFrame(tick);
+// The test runner calls these. The page calls boot.
+const api = {
+  JUMP_V: JUMP_V,
+  GRAVITY_HOLD: GRAVITY_HOLD,
+  GRAVITY_FALL: GRAVITY_FALL,
+  PLAYER_W: PLAYER_W,
+  PLAYER_H: PLAYER_H,
+  STEP_UP: STEP_UP,
+  LEVEL_LEN: LEVEL_LEN,
+  MIN_GAP: MIN_GAP,
+  SCENES: SCENES,
+  player: player,
+  state: state,
+  obstacles: obstacles,
+  makePattern: makePattern,
+  resetRun: resetRun,
+  update: update,
+  spawnAhead: spawnAhead,
+  runSpeed: runSpeed,
+  sceneDef: sceneDef,
+  setHolding: function (v) { holding = v; },
+  getHolding: function () { return holding; },
+  pitUnder: pitUnder,
+  die: die
+};
+
+if (typeof globalThis !== "undefined") globalThis.Cruzio = api;
+
+if (typeof document !== "undefined" && !globalThis.CRUZIO_TEST) boot();
