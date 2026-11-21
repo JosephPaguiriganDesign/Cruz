@@ -9,6 +9,14 @@
   var STORE = "hspt-prep-v1";
   var VOCAB_STORE = "hspt-vocab-v1";
   var EXAM_STORE = "hspt-exam-v1";
+  // Apps Script web app URL. Empty keeps the log on this device and sends nothing.
+  var HSPT_LOG_URL = "https://script.google.com/macros/s/AKfycby0h5T84Fb-TnLz88nV1XvrIN8XU7-bygukpv_zj1jzRynOrAumJck-RSWAaqE-ivdstw/exec";
+  var TIME_STORE = "hspt-time-v1";
+  var TIME_TAB = "hspt-time-tab";
+  var IDLE_MS = 60 * 1000;
+  var FLUSH_MS = 5 * 60 * 1000;
+  var QUEUE_MAX = 100;
+  var TIME_SECTIONS = ["study", "practice", "mock", "other"];
 
   var SECTIONS = [
     { id: "verbal", name: "Verbal Skills", count: 60, seconds: 16 * 60 },
@@ -407,7 +415,9 @@
       e.preventDefault();
       var picked = form.querySelector("input[name=choice]:checked");
       if (!picked) return;
+      var firstAnswer = ex.answers[item.id] == null;
       ex.answers[item.id] = Number(picked.value);
+      if (firstAnswer) noteQuestionAnswered();
       if (ex.kind === "practice") {
         ex.revealed = true;
         recordAnswer(item, ex.answers[item.id]);
@@ -741,7 +751,607 @@
     return arr;
   }
 
+  // Active time only: the tab is visible and the user clicked, typed, scrolled,
+  // or touched in the last 60 seconds. Totals live in localStorage by local
+  // date and section. A session starts when they become active (fresh visit,
+  // return from idle, or return from a hidden tab) and ends on idle, hide,
+  // or pagehide. Each POST is one non-overlapping slice of that session.
+  var tabId = "";
+  var currentSection = "other";
+  var open = null;
+  var accruingFrom = null;
+  var lastInput = 0;
+  var idleTimer = null;
+  var flushTimer = null;
+  var retryTimer = null;
+  var bootAt = 0;
+  var inflight = {};
+
+  function emptySections() {
+    return { study: 0, practice: 0, mock: 0, other: 0 };
+  }
+
+  function logUrl() {
+    if (typeof HSPT_LOG_URL !== "string") return "";
+    return HSPT_LOG_URL.replace(/^\s+|\s+$/g, "");
+  }
+
+  function localDateStr(ms) {
+    var d = new Date(ms);
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  }
+
+  function nextLocalMidnight(ms) {
+    var d = new Date(ms);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+  }
+
+  function makeId() {
+    try {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    } catch (err) { /* private context */ }
+    return "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function shortAgent() {
+    var ua = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "";
+    var browser = "Browser";
+    var version = "";
+    if (/Edg\//.test(ua)) {
+      browser = "Edge";
+      version = (ua.match(/Edg\/(\d+)/) || [])[1] || "";
+    } else if (/OPR\//.test(ua)) {
+      browser = "Opera";
+      version = (ua.match(/OPR\/(\d+)/) || [])[1] || "";
+    } else if (/Chrome\//.test(ua)) {
+      browser = "Chrome";
+      version = (ua.match(/Chrome\/(\d+)/) || [])[1] || "";
+    } else if (/Firefox\//.test(ua)) {
+      browser = "Firefox";
+      version = (ua.match(/Firefox\/(\d+)/) || [])[1] || "";
+    } else if (/Safari\//.test(ua)) {
+      browser = "Safari";
+      version = (ua.match(/Version\/(\d+)/) || [])[1] || "";
+    }
+    var os = "Unknown";
+    if (/Windows/.test(ua)) os = "Windows";
+    else if (/Android/.test(ua)) os = "Android";
+    else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+    else if (/Mac OS X/.test(ua)) os = "Mac";
+    else if (/Linux/.test(ua)) os = "Linux";
+    return browser + (version ? " " + version : "") + " / " + os;
+  }
+
+  function timeStore() {
+    var store = load(TIME_STORE, null);
+    if (!store || typeof store !== "object" || Array.isArray(store)) {
+      store = { days: {}, sessionCount: 0, queue: [], opens: {} };
+    }
+    if (!store.days || typeof store.days !== "object" || Array.isArray(store.days)) store.days = {};
+    if (!Array.isArray(store.queue)) store.queue = [];
+    if (!store.opens || typeof store.opens !== "object" || Array.isArray(store.opens)) store.opens = {};
+    if (typeof store.sessionCount !== "number" || !isFinite(store.sessionCount)) store.sessionCount = 0;
+    return store;
+  }
+
+  function updateStore(mutator) {
+    var store = timeStore();
+    mutator(store);
+    save(TIME_STORE, store);
+    return store;
+  }
+
+  function ensureDay(store, date) {
+    var day = store.days[date];
+    if (!day || typeof day !== "object" || Array.isArray(day)) {
+      day = { study: 0, practice: 0, mock: 0, other: 0, questions: 0, sessions: 0 };
+      store.days[date] = day;
+    }
+    var keys = ["study", "practice", "mock", "other", "questions", "sessions"];
+    for (var i = 0; i < keys.length; i++) {
+      if (typeof day[keys[i]] !== "number" || !isFinite(day[keys[i]])) day[keys[i]] = 0;
+    }
+    return day;
+  }
+
+  function sectionForPath() {
+    var hash = location.hash || "#/";
+    var path = hash.replace(/^#/, "").split("?")[0];
+    if (path === "/lessons" || path.indexOf("/lesson/") === 0 || path === "/vocab") return "study";
+    if (path === "/practice" || path === "/focus") return "practice";
+    if (path === "/mock") return "mock";
+    if (path === "/quiz") {
+      var ex = exam();
+      if (ex && ex.kind === "mock") return "mock";
+      if (ex && ex.kind === "practice") return "practice";
+      return "mock";
+    }
+    return "other";
+  }
+
+  function syncTimeSection() {
+    try {
+      var next = sectionForPath();
+      if (next === currentSection) return;
+      if (accruingFrom != null) accrueUntil(Date.now());
+      currentSection = next;
+    } catch (err) { /* a tracking failure must not block navigation */ }
+  }
+
+  function copyOpen(src) {
+    var pending = src.pending || emptySections();
+    var remainderMs = src.remainderMs || emptySections();
+    return {
+      sessionId: src.sessionId,
+      startedAt: src.startedAt,
+      sliceStart: src.sliceStart,
+      sliceDate: src.sliceDate,
+      pending: {
+        study: pending.study || 0,
+        practice: pending.practice || 0,
+        mock: pending.mock || 0,
+        other: pending.other || 0
+      },
+      remainderMs: {
+        study: remainderMs.study || 0,
+        practice: remainderMs.practice || 0,
+        mock: remainderMs.mock || 0,
+        other: remainderMs.other || 0
+      },
+      pendingQuestions: src.pendingQuestions || 0,
+      updatedAt: src.updatedAt || src.sliceStart || 0
+    };
+  }
+
+  function rememberOpen(store) {
+    if (!store.opens) store.opens = {};
+    if (open) store.opens[tabId] = copyOpen(open);
+    else delete store.opens[tabId];
+  }
+
+  function rowKey(row) {
+    return (row.sessionId || "") + "|" + (row.start || "");
+  }
+
+  function rowFromOpen(item, endMs) {
+    var pending = item.pending || emptySections();
+    var sections = {
+      study: pending.study || 0,
+      practice: pending.practice || 0,
+      mock: pending.mock || 0,
+      other: pending.other || 0
+    };
+    var active = sections.study + sections.practice + sections.mock + sections.other;
+    var questions = item.pendingQuestions || 0;
+    if (active <= 0 && questions <= 0) return null;
+    var startMs = item.sliceStart || item.startedAt || endMs;
+    if (endMs < startMs) endMs = startMs;
+    return {
+      sessionId: item.sessionId,
+      date: localDateStr(startMs),
+      start: new Date(startMs).toISOString(),
+      end: new Date(endMs).toISOString(),
+      activeSeconds: active,
+      sections: sections,
+      questionsAnswered: questions,
+      userAgent: shortAgent()
+    };
+  }
+
+  function pushQueue(store, row) {
+    if (!row || !row.sessionId) return;
+    store.queue.push(row);
+    if (store.queue.length > QUEUE_MAX) store.queue.splice(0, store.queue.length - QUEUE_MAX);
+  }
+
+  function absorbRemainder(store, item) {
+    item.pending = item.pending || emptySections();
+    item.remainderMs = item.remainderMs || emptySections();
+    var date = item.sliceDate || localDateStr(item.sliceStart || Date.now());
+    for (var i = 0; i < TIME_SECTIONS.length; i++) {
+      var name = TIME_SECTIONS[i];
+      var rem = item.remainderMs[name] || 0;
+      if (rem >= 500) {
+        item.pending[name] = (item.pending[name] || 0) + 1;
+        ensureDay(store, date)[name] += 1;
+        item.remainderMs[name] = 0;
+      }
+    }
+  }
+
+  function credit(date, section, ms) {
+    if (!open || ms <= 0) return;
+    if (!open.pending) open.pending = emptySections();
+    if (!open.remainderMs) open.remainderMs = emptySections();
+    open.remainderMs[section] = (open.remainderMs[section] || 0) + ms;
+    var whole = Math.floor(open.remainderMs[section] / 1000);
+    if (whole > 0) {
+      open.remainderMs[section] -= whole * 1000;
+      open.pending[section] = (open.pending[section] || 0) + whole;
+    }
+    open.updatedAt = Date.now();
+    updateStore(function (store) {
+      if (whole > 0) ensureDay(store, date)[section] += whole;
+      rememberOpen(store);
+    });
+  }
+
+  function finalizeSlice(endMs, keep) {
+    if (!open) return;
+    var ending = open;
+    var next = null;
+    updateStore(function (store) {
+      if (!keep) absorbRemainder(store, ending);
+      var row = rowFromOpen(ending, endMs);
+      if (row) pushQueue(store, row);
+      if (!store.opens) store.opens = {};
+      if (keep) {
+        next = {
+          sessionId: ending.sessionId,
+          startedAt: ending.startedAt,
+          sliceStart: endMs,
+          sliceDate: localDateStr(endMs),
+          pending: emptySections(),
+          remainderMs: {
+            study: (ending.remainderMs && ending.remainderMs.study) || 0,
+            practice: (ending.remainderMs && ending.remainderMs.practice) || 0,
+            mock: (ending.remainderMs && ending.remainderMs.mock) || 0,
+            other: (ending.remainderMs && ending.remainderMs.other) || 0
+          },
+          pendingQuestions: 0,
+          updatedAt: endMs
+        };
+        store.opens[tabId] = copyOpen(next);
+      } else {
+        delete store.opens[tabId];
+      }
+    });
+    open = keep ? next : null;
+    if (!keep) {
+      accruingFrom = null;
+      disarmFlush();
+      clearIdle();
+    }
+  }
+
+  function addActive(from, to) {
+    if (!open || to <= from) return;
+    var cursor = from;
+    var guard = 0;
+    while (open && cursor < to && guard < 10) {
+      guard += 1;
+      var boundary = nextLocalMidnight(cursor);
+      var end = to < boundary ? to : boundary;
+      var date = localDateStr(cursor);
+      if (open.sliceDate !== date) {
+        finalizeSlice(cursor, true);
+        if (!open) return;
+      }
+      credit(date, currentSection, end - cursor);
+      if (!open) return;
+      if (end < to && end === boundary) {
+        finalizeSlice(boundary, true);
+        cursor = boundary;
+      } else {
+        cursor = end;
+      }
+    }
+  }
+
+  function accrueUntil(now) {
+    if (accruingFrom == null || !open) {
+      accruingFrom = null;
+      return;
+    }
+    var end = now;
+    var cap = lastInput + IDLE_MS;
+    if (end > cap) end = cap;
+    if (end > accruingFrom) addActive(accruingFrom, end);
+    accruingFrom = (now >= cap || document.visibilityState !== "visible") ? null : end;
+  }
+
+  function clearIdle() {
+    if (idleTimer != null) clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+
+  function disarmFlush() {
+    if (flushTimer != null) clearInterval(flushTimer);
+    flushTimer = null;
+  }
+
+  function armIdle() {
+    clearIdle();
+    var delay = lastInput + IDLE_MS - Date.now();
+    if (delay < 0) delay = 0;
+    idleTimer = setTimeout(onIdle, delay);
+  }
+
+  function onIdle() {
+    idleTimer = null;
+    if (Date.now() - lastInput < IDLE_MS) {
+      armIdle();
+      return;
+    }
+    endSession(lastInput + IDLE_MS);
+    trySend();
+  }
+
+  function onFlushInterval() {
+    if (!open || accruingFrom == null) return;
+    var now = Date.now();
+    if (document.visibilityState !== "visible" || !lastInput || now - lastInput >= IDLE_MS) return;
+    accrueUntil(now);
+    if (!open) return;
+    finalizeSlice(now, true);
+    trySend();
+  }
+
+  function armFlush() {
+    if (flushTimer != null) return;
+    flushTimer = setInterval(onFlushInterval, FLUSH_MS);
+  }
+
+  function beginSession(now) {
+    open = {
+      sessionId: makeId(),
+      startedAt: now,
+      sliceStart: now,
+      sliceDate: localDateStr(now),
+      pending: emptySections(),
+      remainderMs: emptySections(),
+      pendingQuestions: 0,
+      updatedAt: now
+    };
+    accruingFrom = now;
+    var date = open.sliceDate;
+    updateStore(function (store) {
+      store.sessionCount += 1;
+      ensureDay(store, date).sessions += 1;
+      rememberOpen(store);
+    });
+  }
+
+  function endSession(now) {
+    if (!open && accruingFrom == null) return;
+    var end = now;
+    if (lastInput && end > lastInput + IDLE_MS) end = lastInput + IDLE_MS;
+    if (accruingFrom != null) accrueUntil(end);
+    if (open) finalizeSlice(end, false);
+    accruingFrom = null;
+    disarmFlush();
+    clearIdle();
+  }
+
+  function becomeActive(now) {
+    if (document.visibilityState !== "visible") return;
+    if (!lastInput || now - lastInput >= IDLE_MS) return;
+    if (!open) beginSession(now);
+    if (!open) return;
+    if (accruingFrom == null) accruingFrom = now;
+    armIdle();
+    armFlush();
+  }
+
+  function onActivity(evt) {
+    try {
+      if (evt && evt.isTrusted === false) return;
+      if (document.visibilityState !== "visible") return;
+      var now = Date.now();
+      lastInput = now;
+      becomeActive(now);
+    } catch (err) { /* do not swallow the click */ }
+  }
+
+  function onScroll(evt) {
+    try {
+      if (Date.now() - bootAt < 800) return;
+      onActivity(evt);
+    } catch (err) { /* ignore */ }
+  }
+
+  function onVisibility() {
+    try {
+      if (document.visibilityState === "hidden") {
+        endSession(Date.now());
+        trySend();
+        return;
+      }
+      var now = Date.now();
+      if (lastInput && now - lastInput < IDLE_MS) becomeActive(now);
+    } catch (err) { /* ignore */ }
+  }
+
+  function onPageHide() {
+    try {
+      endSession(Date.now());
+      trySend();
+    } catch (err) { /* ignore */ }
+  }
+
+  function onPageShow() {
+    try {
+      if (document.visibilityState !== "visible") return;
+      var now = Date.now();
+      if (lastInput && now - lastInput < IDLE_MS && !open) becomeActive(now);
+    } catch (err) { /* ignore */ }
+  }
+
+  function tick() {
+    try {
+      if (accruingFrom == null && !open) return;
+      var now = Date.now();
+      var active = document.visibilityState === "visible" && lastInput && (now - lastInput < IDLE_MS);
+      if (!active) {
+        if (open || accruingFrom != null) {
+          endSession(now);
+          trySend();
+        }
+        return;
+      }
+      accrueUntil(now);
+    } catch (err) { /* ignore */ }
+  }
+
+  function noteQuestionAnswered() {
+    try {
+      var now = Date.now();
+      if (document.visibilityState === "visible") {
+        lastInput = now;
+        becomeActive(now);
+      }
+      if (!open) return;
+      open.pendingQuestions = (open.pendingQuestions || 0) + 1;
+      open.updatedAt = now;
+      var date = open.sliceDate || localDateStr(now);
+      updateStore(function (store) {
+        ensureDay(store, date).questions += 1;
+        rememberOpen(store);
+      });
+    } catch (err) { /* an answer still counts if tracking fails */ }
+  }
+
+  function recoverOpens() {
+    var now = Date.now();
+    updateStore(function (store) {
+      var opens = store.opens || {};
+      Object.keys(opens).forEach(function (id) {
+        var item = opens[id];
+        if (!item || typeof item !== "object") {
+          delete opens[id];
+          return;
+        }
+        var age = now - (item.updatedAt || item.sliceStart || 0);
+        var mine = id === tabId;
+        if (!mine && age < 3 * 60 * 1000) return;
+        var normalized = copyOpen(item);
+        absorbRemainder(store, normalized);
+        var row = rowFromOpen(normalized, normalized.updatedAt || normalized.sliceStart || now);
+        if (row) pushQueue(store, row);
+        delete opens[id];
+      });
+      store.opens = opens;
+    });
+  }
+
+  function removeQueued(key) {
+    updateStore(function (store) {
+      store.queue = store.queue.filter(function (row) {
+        return rowKey(row) !== key;
+      });
+    });
+  }
+
+  function requeue(row) {
+    var key = rowKey(row);
+    updateStore(function (store) {
+      for (var i = 0; i < store.queue.length; i++) {
+        if (rowKey(store.queue[i]) === key) return;
+      }
+      pushQueue(store, row);
+    });
+  }
+
+  function scheduleRetry() {
+    if (retryTimer || !logUrl()) return;
+    retryTimer = setTimeout(function () {
+      retryTimer = null;
+      if (!timeStore().queue.length) return;
+      trySend();
+    }, 30000);
+  }
+
+  function beacon(url, body) {
+    if (!navigator || typeof navigator.sendBeacon !== "function") return false;
+    try {
+      if (typeof Blob === "function") {
+        var blob = new Blob([body], { type: "text/plain" });
+        if (navigator.sendBeacon(url, blob)) return true;
+      }
+    } catch (err) { /* try the string body */ }
+    try {
+      return navigator.sendBeacon(url, body) === true;
+    } catch (err2) {
+      return false;
+    }
+  }
+
+  function deliver(row) {
+    var url = logUrl();
+    if (!url || !row) return;
+    var key = rowKey(row);
+    if (inflight[key]) return;
+    inflight[key] = true;
+    var body = JSON.stringify(row);
+    if (beacon(url, body)) {
+      removeQueued(key);
+      delete inflight[key];
+      return;
+    }
+    var unloading = document.visibilityState !== "visible";
+    if (unloading) removeQueued(key);
+    try {
+      fetch(url, {
+        method: "POST",
+        mode: "no-cors",
+        cache: "no-store",
+        keepalive: true,
+        credentials: "omit",
+        headers: { "Content-Type": "text/plain" },
+        body: body
+      }).then(function () {
+        if (!unloading) removeQueued(key);
+        delete inflight[key];
+      }, function () {
+        delete inflight[key];
+        if (unloading) requeue(row);
+        scheduleRetry();
+      });
+    } catch (err) {
+      delete inflight[key];
+      if (unloading) requeue(row);
+      else scheduleRetry();
+    }
+  }
+
+  function trySend() {
+    if (!logUrl()) return;
+    var copy = timeStore().queue.slice();
+    for (var i = 0; i < copy.length; i++) deliver(copy[i]);
+  }
+
+  function readTabId() {
+    try {
+      var existing = sessionStorage.getItem(TIME_TAB);
+      if (existing) return existing;
+      var id = makeId();
+      sessionStorage.setItem(TIME_TAB, id);
+      return id;
+    } catch (err) {
+      return makeId();
+    }
+  }
+
+  function startTimeTracker() {
+    bootAt = Date.now();
+    tabId = readTabId();
+    currentSection = sectionForPath();
+    recoverOpens();
+    trySend();
+    window.addEventListener("click", onActivity, true);
+    window.addEventListener("keydown", onActivity, true);
+    window.addEventListener("touchstart", onActivity, true);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    setInterval(tick, 1000);
+  }
+
   function route() {
+    syncTimeSection();
     var hash = location.hash || "#/";
     var path = hash.replace(/^#/, "").split("?")[0];
     if (path === "/" || path === "") return home();
@@ -759,6 +1369,7 @@
   }
 
   window.addEventListener("hashchange", route);
+  try { startTimeTracker(); } catch (err) { /* study app still runs */ }
   if (!location.hash) location.hash = "#/";
   route();
 })();
