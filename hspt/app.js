@@ -10,7 +10,7 @@
   var VOCAB_STORE = "hspt-vocab-v1";
   var EXAM_STORE = "hspt-exam-v1";
   // Apps Script web app URL. Empty keeps the log on this device and sends nothing.
-  var HSPT_LOG_URL = "";
+  var HSPT_LOG_URL = "https://script.google.com/macros/s/AKfycby0h5T84Fb-TnLz88nV1XvrIN8XU7-bygukpv_zj1jzRynOrAumJck-RSWAaqE-ivdstw/exec";
   var TIME_STORE = "hspt-time-v1";
   var TIME_TAB = "hspt-time-tab";
   var IDLE_MS = 60 * 1000;
