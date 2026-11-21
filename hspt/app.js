@@ -21,6 +21,8 @@
   var FOCUS = { verbal: true, reading: true, language: true };
 
   var main = document.getElementById("main");
+  var ICON_OK = '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>';
+  var ICON_NO = '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>';
   var timerHandle = null;
 
   function load(key, fallback) {
@@ -125,11 +127,13 @@
   function home() {
     var days = daysUntil();
     var label = days > 1 ? days + " days" : days === 1 ? "1 day" : days === 0 ? "Today" : "Test day has passed";
-    var wrap = el("div", null, [
-      el("p", { class: "tag focus" }, ["Focus: Verbal, Reading, Language"]),
-      el("h1", null, ["HSPT practice"]),
-      el("p", { class: "lede" }, ["Five sections, 298 questions, about two and a half hours of testing. These questions are original. The score at the end is only an estimate."]),
-      el("div", { class: "card" }, [
+    var wrap = el("div", { class: "home" }, [
+      el("div", { class: "hero", "data-ghost": days > 0 ? String(days) : "" }, [
+        el("p", { class: "tag focus" }, ["Focus: Verbal, Reading, Language"]),
+        el("h1", null, ["HSPT practice"]),
+        el("p", { class: "lede" }, ["Five sections, 298 questions, about two and a half hours of testing. These questions are original. The score at the end is only an estimate."])
+      ]),
+      el("div", { class: "card countdown" }, [
         el("p", { class: "muted" }, ["Countdown to January 9, 2027"]),
         el("div", { class: "count" }, [label, el("span", null, ["until test day"])])
       ]),
@@ -148,7 +152,7 @@
   }
 
   function cardLink(title, text, href) {
-    return el("a", { class: "card", href: href }, [el("h2", null, [title]), el("p", null, [text])]);
+    return el("a", { class: "card card-link", href: href }, [el("h2", null, [title]), el("p", null, [text])]);
   }
 
   function lessons() {
@@ -161,7 +165,7 @@
       group.forEach(function (lesson) {
         var bits = [el("h2", null, [lesson.title]), el("p", { class: "muted" }, [lesson.minutes + " min"])];
         if (lesson.focus) bits.unshift(el("span", { class: "tag focus" }, ["Focus"]));
-        wrap.appendChild(el("a", { class: "card", href: "#/lesson/" + lesson.id }, bits));
+        wrap.appendChild(el("a", { class: "card card-link", href: "#/lesson/" + lesson.id }, bits));
       });
     });
     show(wrap);
@@ -343,11 +347,23 @@
     var bounds = sectionBounds(ex);
     var wrap = el("div");
     var bar = el("div", { class: "bar" });
-    bar.appendChild(el("span", null, [ex.label + " · " + (ex.kind === "mock" ? bounds.meta.name : "Practice")]));
+    var qNum = ex.index - bounds.start + 1;
+    var qTotal = bounds.end - bounds.start;
+    bar.appendChild(el("div", { class: "bar-meta" }, [
+      el("span", { class: "label" }, [ex.label + " — " + (ex.kind === "mock" ? bounds.meta.name : "Practice")]),
+      el("span", { class: "qcount" }, ["Question " + qNum + " of " + qTotal])
+    ]));
     var timer = el("span", { class: "timer", id: "timer" }, [""]);
-    bar.appendChild(timer);
+    if (ex.kind === "mock") {
+      bar.appendChild(el("div", { class: "timer-box", role: "timer", "aria-label": "Time left in this section" }, [
+        el("span", { class: "label timer-label" }, [el("span", { class: "tl-normal" }, ["Time left"]), el("span", { class: "tl-warn" }, ["Under 1 min"])]),
+        timer
+      ]));
+    }
     wrap.appendChild(bar);
-    wrap.appendChild(el("p", { class: "muted" }, ["Question " + (ex.index - bounds.start + 1) + " of " + (bounds.end - bounds.start)]));
+    wrap.appendChild(el("div", { class: "qprog", "aria-hidden": "true" }, [
+      el("span", { style: "width:" + Math.round(100 * (qNum - (ex.revealed ? 0 : 1)) / qTotal) + "%" })
+    ]));
     if (item.passageId) {
       var p = passage(item.passageId);
       if (p) {
@@ -363,7 +379,16 @@
       var input = el("input", { type: "radio", name: "choice", id: id, value: String(idx) });
       if (ex.answers[item.id] === idx) input.checked = true;
       if (ex.revealed) input.disabled = true;
-      list.appendChild(el("label", { for: id }, [input, String.fromCharCode(65 + idx) + ". " + choice]));
+      var state = "";
+      var icon = String.fromCharCode(65 + idx);
+      if (ex.revealed && idx === item.answer) { state = "is-right"; icon = { html: ICON_OK }; }
+      else if (ex.revealed && idx === ex.answers[item.id]) { state = "is-wrong"; icon = { html: ICON_NO }; }
+      var letter = typeof icon === "string" ? el("span", { class: "letter", "aria-hidden": "true" }, [icon]) : el("span", { class: "letter", "aria-hidden": "true", html: icon.html });
+      var srState = state === "is-right" ? " (correct answer)" : state === "is-wrong" ? " (your answer, incorrect)" : "";
+      list.appendChild(el("label", { for: id, class: state }, [
+        input, letter,
+        el("span", { class: "choice-text" }, [el("span", { class: "sr" }, [String.fromCharCode(65 + idx) + ". "]), choice, srState ? el("span", { class: "sr" }, [srState]) : null])
+      ]));
     });
     form.appendChild(list);
     var feedback = el("div", { id: "feedback", "aria-live": "polite" });
@@ -405,9 +430,13 @@
 
   function renderFeedback(item, picked) {
     var ok = picked === item.answer;
-    var box = el("div", null, [
-      el("p", { class: ok ? "good" : "bad" }, [ok ? "Correct." : "Not quite. The answer is " + String.fromCharCode(65 + item.answer) + ". " + item.choices[item.answer]]),
-      el("p", null, [item.explanation])
+    var box = el("div", { class: "fb " + (ok ? "fb-good" : "fb-bad") }, [
+      el("p", { class: "fb-head" }, [
+        el("span", { class: "fb-ico", "aria-hidden": "true", html: ok ? ICON_OK : ICON_NO }),
+        el("strong", null, [ok ? "Correct" : "Incorrect"])
+      ]),
+      ok ? null : el("p", { class: "fb-answer" }, ["The answer is " + String.fromCharCode(65 + item.answer) + ". " + item.choices[item.answer]]),
+      el("p", { class: "fb-why" }, [item.explanation])
     ]);
     return box;
   }
@@ -532,7 +561,10 @@
     if (!summary) return home();
     var wrap = el("div", null, [
       el("h1", null, [summary.label + " results"]),
-      el("p", null, [summary.correct + " of " + summary.total + " correct (" + summary.approx.pct + "%)."])
+      el("div", { class: "score" }, [
+        el("span", { class: "score-num" }, [summary.correct + "/" + summary.total]),
+        el("span", { class: "score-sub" }, [summary.correct + " of " + summary.total + " correct (" + summary.approx.pct + "%)."])
+      ])
     ]);
     var table = el("table", null, [
       el("thead", null, [el("tr", null, [el("th", null, ["Section"]), el("th", null, ["Correct"]), el("th", null, ["Approx. score"])])]),
@@ -561,7 +593,7 @@
       if (!item) return;
       wrap.appendChild(el("div", { class: "miss" }, [
         el("p", { class: "qstem" }, [item.stem]),
-        el("p", { class: "good" }, ["Answer: " + item.choices[item.answer]]),
+        el("p", { class: "good" }, [el("span", { class: "fb-ico", "aria-hidden": "true", html: ICON_OK }), "Answer: " + item.choices[item.answer]]),
         el("p", null, [item.explanation])
       ]));
     });
