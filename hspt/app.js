@@ -125,10 +125,35 @@
     timerHandle = null;
   }
 
+  function navTarget() {
+    var path = (location.hash || "#/").replace(/^#/, "").split("?")[0] || "/";
+    if (path === "/") return "#/";
+    if (path === "/lessons" || path.indexOf("/lesson/") === 0) return "#/lessons";
+    if (path === "/practice" || path === "/focus") return "#/practice";
+    if (path === "/vocab") return "#/vocab";
+    if (path === "/mock") return "#/mock";
+    if (path === "/progress") return "#/progress";
+    if (path === "/quiz") {
+      var ex = load(EXAM_STORE, null);
+      return ex && ex.kind === "mock" ? "#/mock" : "#/practice";
+    }
+    return null;
+  }
+
+  function markNav() {
+    var target = navTarget();
+    var links = document.querySelectorAll(".nav a");
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].getAttribute("href") === target) links[i].setAttribute("aria-current", "page");
+      else links[i].removeAttribute("aria-current");
+    }
+  }
+
   function show(node) {
     clearTimer();
     main.innerHTML = "";
     main.appendChild(node);
+    markNav();
     main.focus();
   }
 
@@ -138,7 +163,7 @@
     var wrap = el("div", { class: "home" }, [
       el("div", { class: "hero", "data-ghost": days > 0 ? String(days) : "" }, [
         el("p", { class: "tag focus" }, ["Focus: Verbal, Reading, Language"]),
-        el("h1", null, ["HSPT practice"]),
+        el("h1", { "data-ghost": days > 0 ? String(days) : "" }, ["HSPT practice"]),
         el("p", { class: "lede" }, ["Five sections, 298 questions, about two and a half hours of testing. These questions are original. The score at the end is only an estimate."])
       ]),
       el("div", { class: "card countdown" }, [
