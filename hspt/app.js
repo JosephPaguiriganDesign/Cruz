@@ -1,14 +1,16 @@
 (function () {
   "use strict";
 
-  var BANK = window.HSPT_BANK || [];
-  var PASSAGES = window.HSPT_PASSAGES || [];
+  var EXTRA = window.HSPT_EXTRA || { passages: [], questions: [] };
+  var BANK = (window.HSPT_BANK || []).concat(EXTRA.questions || []);
+  var PASSAGES = (window.HSPT_PASSAGES || []).concat(EXTRA.passages || []);
   var LESSONS = window.HSPT_LESSONS || [];
   var VOCAB = window.HSPT_VOCAB || [];
   var TEST_DAY = new Date(2027, 0, 9);
   var STORE = "hspt-prep-v1";
   var VOCAB_STORE = "hspt-vocab-v1";
   var EXAM_STORE = "hspt-exam-v1";
+  var SEEN_STORE = "hspt-seen-v1";
   // Apps Script web app URL. Empty keeps the log on this device and sends nothing.
   var HSPT_LOG_URL = "https://script.google.com/macros/s/AKfycby0h5T84Fb-TnLz88nV1XvrIN8XU7-bygukpv_zj1jzRynOrAumJck-RSWAaqE-ivdstw/exec";
   var TIME_STORE = "hspt-time-v1";
@@ -25,8 +27,6 @@
     { id: "math", name: "Mathematics", count: 64, seconds: 45 * 60 },
     { id: "language", name: "Language", count: 60, seconds: 25 * 60 }
   ];
-
-  var FOCUS = { verbal: true, reading: true, language: true };
 
   var main = document.getElementById("main");
   var ICON_OK = '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>';
@@ -58,9 +58,64 @@
     return state;
   }
 
+  var GEN_CACHE = {};
   function byId(id) {
+    if (GEN_CACHE[id]) return GEN_CACHE[id];
     for (var i = 0; i < BANK.length; i++) if (BANK[i].id === id) return BANK[i];
+    if (window.HSPT_GEN && id && id.indexOf("g~") === 0) {
+      var parsed = window.HSPT_GEN.parseGenId(id);
+      if (parsed) {
+        var made = window.HSPT_GEN.make(parsed.type, parsed.seed);
+        if (made) {
+          GEN_CACHE[id] = made;
+          return made;
+        }
+      }
+    }
     return null;
+  }
+  function seenState() {
+    var existing = load(SEEN_STORE, null);
+    if (existing && existing.items && typeof existing.items === "object") {
+      if (!existing.cursors) existing.cursors = {};
+      if (!existing.cycles) existing.cycles = {};
+      return existing;
+    }
+    var fresh = { v: 1, items: {}, cursors: {}, cycles: {} };
+    seedSeenFromProgress(fresh);
+    save(SEEN_STORE, fresh);
+    return fresh;
+  }
+  function seedSeenFromProgress(state) {
+    if (!window.HSPT_SELECT) return;
+    var store = progress();
+    if (!store || !store.answers) return;
+    Object.keys(store.answers).forEach(function (id) {
+      var rec = store.answers[id];
+      var item = byId(id);
+      if (!item) return;
+      var sig = window.HSPT_SELECT.signature(item);
+      if (state.items[sig]) return;
+      state.items[sig] = {
+        id: item.id,
+        section: (rec && rec.section) || item.section,
+        type: (rec && rec.type) || item.type,
+        at: (rec && rec.at) || 0,
+        missed: !!(rec && rec.correct === false)
+      };
+    });
+  }
+  function noteSeenResult(item, correct) {
+    if (!item || !window.HSPT_SELECT) return;
+    var state = seenState();
+    var sig = window.HSPT_SELECT.signature(item);
+    var rec = state.items[sig];
+    if (!rec) {
+      rec = { id: item.id, section: item.section, type: item.type, at: Date.now(), missed: false };
+      state.items[sig] = rec;
+    }
+    rec.missed = !correct;
+    save(SEEN_STORE, state);
   }
   function passage(id) {
     for (var i = 0; i < PASSAGES.length; i++) if (PASSAGES[i].id === id) return PASSAGES[i];
@@ -237,7 +292,7 @@
     var preset = force || params.get("section") || "verbal";
     var wrap = el("div", null, [
       el("h1", null, ["Practice"]),
-      el("p", null, ["You get the explanation as soon as you answer. Focus drill mixes Verbal, Reading, and Language, with extra Verbal."])
+      el("p", null, ["You get the explanation as soon as you answer. Focus drill mixes Verbal, Reading, and Language, with extra Verbal. New sets start with questions you have not seen."])
     ]);
     var form = el("form", null, []);
     form.appendChild(el("label", { for: "sec" }, ["Section"]));
@@ -269,32 +324,26 @@
     show(wrap);
   }
 
-  function poolFor(section) {
-    if (section === "focus") {
-      return BANK.filter(function (q) { return FOCUS[q.section]; });
-    }
-    return BANK.filter(function (q) { return q.section === section; });
-  }
-
   function startPractice(section, n) {
-    var pool = poolFor(section).slice();
-    shuffle(pool, Date.now() % 100000);
-    if (section === "focus") {
-      var verbal = pool.filter(function (q) { return q.section === "verbal"; });
-      var reading = pool.filter(function (q) { return q.section === "reading"; });
-      var language = pool.filter(function (q) { return q.section === "language"; });
-        var mixed = [];
-        var i = 0;
-        while (mixed.length < n && (verbal.length || reading.length || language.length)) {
-          var bucket = (i % 5 < 3) ? verbal : (i % 5 === 3) ? reading : language;
-        if (!bucket.length) bucket = verbal.length ? verbal : (reading.length ? reading : language);
-        mixed.push(bucket.shift());
-        i += 1;
-      }
-      pool = mixed;
-    } else {
-      pool = pool.slice(0, n);
-    }
+    var seen = seenState();
+    var picked = section === "focus"
+      ? window.HSPT_SELECT.focus({
+          bank: BANK,
+          seen: seen,
+          n: n,
+          now: Date.now(),
+          gen: window.HSPT_GEN
+        })
+      : window.HSPT_SELECT.practice({
+          bank: BANK,
+          seen: seen,
+          section: section,
+          n: n,
+          now: Date.now(),
+          gen: window.HSPT_GEN
+        });
+    save(SEEN_STORE, picked.seen);
+    var pool = picked.items;
     var exam = {
       kind: "practice",
       label: section === "focus" ? "Focus drill" : sectionMeta(section).name + " practice",
@@ -313,7 +362,7 @@
   function mockHome() {
     var wrap = el("div", null, [
       el("h1", null, ["Full mock test"]),
-      el("p", null, ["Two original tests. Each has 298 questions and the real section times: 16, 30, 25, 45, and 25 minutes. You cannot go back to a finished section. There is no score penalty for a wrong answer, so guess if time is short."]),
+      el("p", null, ["Each test has 298 questions and the real section times: 16, 30, 25, 45, and 25 minutes. A new test prefers questions you have not seen yet. You cannot go back to a finished section. There is no score penalty for a wrong answer, so guess if time is short."]),
       el("p", { class: "muted" }, ["No calculator, same as the real HSPT."])
     ]);
     var row = el("div", { class: "row" });
@@ -332,12 +381,15 @@
   }
 
   function startMock(n) {
-    var ids = [];
-    SECTIONS.forEach(function (sec) {
-      var part = BANK.filter(function (q) { return q.mock === n && q.section === sec.id; });
-      shuffle(part, n * 1000 + sec.id.length);
-      part.forEach(function (q) { ids.push(q.id); });
+    var seen = seenState();
+    var picked = window.HSPT_SELECT.mock({
+      bank: BANK,
+      seen: seen,
+      now: Date.now(),
+      gen: window.HSPT_GEN
     });
+    save(SEEN_STORE, picked.seen);
+    var ids = picked.items.map(function (q) { return q.id; });
     save(EXAM_STORE, {
       kind: "mock",
       mock: n,
@@ -481,6 +533,7 @@
     store.answers[item.id] = { correct: picked === item.answer, section: item.section, type: item.type, at: Date.now() };
     save(STORE, store);
     if (picked !== item.answer && item.word) scheduleWord(item.word, true);
+    noteSeenResult(item, picked === item.answer);
   }
 
   function nextPractice() {
@@ -759,21 +812,6 @@
     wrap.appendChild(table);
     wrap.appendChild(el("p", { class: "muted" }, [store.mocks.length + " finished practice sets or mocks are saved on this device."]));
     show(wrap);
-  }
-
-  function shuffle(arr, seed) {
-    var a = seed || 1;
-    function rnd() {
-      a = (a * 1664525 + 1013904223) >>> 0;
-      return a / 4294967296;
-    }
-    for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(rnd() * (i + 1));
-      var t = arr[i];
-      arr[i] = arr[j];
-      arr[j] = t;
-    }
-    return arr;
   }
 
   // Active time only: the tab is visible and the user clicked, typed, scrolled,
