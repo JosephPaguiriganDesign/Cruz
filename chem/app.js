@@ -341,13 +341,24 @@
     tryBox.appendChild(rich("p", "qstem", lesson.example.stem));
     tryBox.appendChild(choiceList(lesson.example, tryState.picked, tryState.shown, function (idx) {
       tryState.picked = idx;
+      tryState.hint = false;
       lessonView(id);
     }));
     if (tryState.shown) tryBox.appendChild(feedbackBox(lesson.example, tryState.picked));
+    else if (tryState.hint) {
+      tryBox.appendChild(el("div", { class: "fb", "aria-live": "polite" }, [
+        el("p", { class: "fb-why" }, ["Pick an answer first."])
+      ]));
+    }
     var tryRow = el("div", { class: "row" });
     if (!tryState.shown) {
       tryRow.appendChild(el("button", { type: "button", onclick: function () {
-        if (tryState.picked == null) return;
+        if (tryState.picked == null) {
+          tryState.hint = true;
+          lessonView(id);
+          return;
+        }
+        tryState.hint = false;
         tryState.shown = true;
         var store = prep();
         store.lessons[id] = true;
@@ -358,6 +369,7 @@
       tryRow.appendChild(el("button", { type: "button", onclick: function () {
         tryState.picked = null;
         tryState.shown = false;
+        tryState.hint = false;
         lessonView(id);
       } }, ["Try another"]));
     }
@@ -841,7 +853,9 @@
     var pct = summary.total ? Math.round(100 * summary.correct / summary.total) : 0;
     var mins = Math.max(1, Math.round((summary.elapsed || 0) / 60000));
     var meta = topicMeta(summary.topic);
-    var line = pct >= 85 ? (meta.name || summary.label) + ": cleared, Sam." : summary.correct + " of " + summary.total + ".";
+    var minLabel = mins === 1 ? "1 min" : mins + " min";
+    var line = summary.correct + " of " + summary.total + " correct (" + pct + "%) in " + minLabel + ".";
+    if (pct >= 85) line += " " + (meta.name || summary.label) + ": cleared, Sam.";
     var wrap = el("div", null, [
       el("h1", null, [summary.label]),
       el("div", { class: "score" }, [
@@ -850,7 +864,7 @@
           el("span", { class: "score-num" }, [summary.correct + "/" + summary.total]),
           el("span", { class: "unit-sym", html: summary.symbol || "Ch" })
         ]),
-        el("p", { class: "score-sub" }, [pct + "% · " + mins + " min. " + line])
+        el("p", { class: "score-sub" }, [line])
       ])
     ]);
     var table = el("table", { class: "data-table" }, [
@@ -1045,7 +1059,6 @@
         ]));
         detail.appendChild(el("div", null, [
           el("h2", null, [current.name]),
-          el("p", null, [current.label + " · " + current.code]),
           el("dl", null, [
             el("dt", null, ["Atomic number"]), el("dd", null, [String(current.z)]),
             el("dt", null, ["Symbol"]), el("dd", null, [current.symbol]),
