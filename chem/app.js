@@ -875,6 +875,10 @@
       ]));
     });
     wrap.appendChild(table);
+    wrap.appendChild(el("div", { class: "row" }, [
+      el("a", { class: "btn", href: "#/focus" }, ["Drill the misses"]),
+      el("a", { class: "btn secondary", href: "#/tests" }, ["Back to tests"])
+    ]));
     wrap.appendChild(el("h2", null, ["Missed questions"]));
     if (!summary.missed.length) wrap.appendChild(el("p", null, ["None."]));
     summary.missed.slice(0, 30).forEach(function (id) {
@@ -887,10 +891,6 @@
         rich("p", "", item.explanation)
       ]));
     });
-    wrap.appendChild(el("div", { class: "row" }, [
-      el("a", { class: "btn", href: "#/focus" }, ["Drill the misses"]),
-      el("a", { class: "btn secondary", href: "#/tests" }, ["Back to tests"])
-    ]));
     show(wrap);
   }
 
