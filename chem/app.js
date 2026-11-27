@@ -509,7 +509,7 @@
         el("span", { class: "unit-z" }, [meta.no]),
         el("span", { class: "unit-sym", html: meta.symbol }),
         el("span", { class: "unit-name" }, [meta.name]),
-        el("span", { class: "unit-meta" }, [stat.word + " · 12 questions"])
+        el("span", { class: "unit-meta" }, [stat.word, el("br"), "12 questions"])
       ]);
       list.appendChild(el("li", null, [a]));
     });
@@ -610,12 +610,19 @@
     var form = el("form");
     form.appendChild(choiceList(item, ex.answers[item.id], ex.revealed, function (idx) {
       var first = ex.answers[item.id] == null;
+      var clearHint = !!ex.hint;
       ex.answers[item.id] = idx;
+      ex.hint = false;
       save(EXAM_STORE, ex);
       if (first) noteQuestionAnswered();
-      if (timed) quiz();
+      if (timed || clearHint) quiz();
     }));
     if (ex.revealed) form.appendChild(feedbackBox(item, ex.answers[item.id]));
+    else if (ex.hint && (ex.kind === "practice" || ex.kind === "focus")) {
+      form.appendChild(el("div", { class: "fb", "aria-live": "polite" }, [
+        el("p", { class: "fb-why" }, ["Pick an answer first."])
+      ]));
+    }
     var buttons = el("div", { class: timed ? "row test-actions" : "row" });
     if (ex.kind === "practice" || ex.kind === "focus") {
       if (!ex.revealed) buttons.appendChild(el("button", { type: "submit" }, ["Check"]));
@@ -642,7 +649,13 @@
       e.preventDefault();
       var picked = form.querySelector("input[name=choice]:checked");
       if ((ex.kind === "practice" || ex.kind === "focus") && !ex.revealed) {
-        if (!picked) return;
+        if (!picked) {
+          ex.hint = true;
+          save(EXAM_STORE, ex);
+          quiz();
+          return;
+        }
+        ex.hint = false;
         var first = ex.answers[item.id] == null;
         ex.answers[item.id] = Number(picked.value);
         if (first) noteQuestionAnswered();
@@ -854,8 +867,13 @@
     var mins = Math.max(1, Math.round((summary.elapsed || 0) / 60000));
     var meta = topicMeta(summary.topic);
     var minLabel = mins === 1 ? "1 min" : mins + " min";
-    var line = summary.correct + " of " + summary.total + " correct (" + pct + "%) in " + minLabel + ".";
-    if (pct >= 85) line += " " + (meta.name || summary.label) + ": cleared, Sam.";
+    var scoreLine = el("p", { class: "score-sub" }, [
+      summary.correct + " of " + summary.total + " correct (" + pct + "%) in " + minLabel + "."
+    ]);
+    if (pct >= 85 && !summary.missed.length) {
+      scoreLine.appendChild(el("br"));
+      scoreLine.appendChild(document.createTextNode("Cleared, Sam."));
+    }
     var wrap = el("div", null, [
       el("h1", null, [summary.label]),
       el("div", { class: "score" }, [
@@ -864,7 +882,7 @@
           el("span", { class: "score-num" }, [summary.correct + "/" + summary.total]),
           el("span", { class: "unit-sym", html: summary.symbol || "Ch" })
         ]),
-        el("p", { class: "score-sub" }, [line])
+        scoreLine
       ])
     ]);
     var table = el("table", { class: "data-table" }, [
@@ -889,10 +907,25 @@
       ]));
     });
     wrap.appendChild(table);
-    wrap.appendChild(el("div", { class: "row" }, [
-      el("a", { class: "btn", href: "#/focus" }, ["Drill the misses"]),
-      el("a", { class: "btn secondary", href: "#/tests" }, ["Back to tests"])
-    ]));
+    var actions = el("div", { class: "row" });
+    if (summary.missed && summary.missed.length) {
+      actions.appendChild(el("a", { class: "btn", href: "#/focus" }, ["Drill the misses"]));
+      actions.appendChild(el("a", { class: "btn secondary", href: "#/tests" }, ["Back to tests"]));
+    } else {
+      var nextUnit = null;
+      for (var ti = 0; ti < TOPICS.length; ti++) {
+        if (TOPICS[ti].id === summary.topic && TOPICS[ti + 1]) nextUnit = TOPICS[ti + 1];
+      }
+      if (nextUnit) {
+        actions.appendChild(el("a", { class: "btn", href: "#/lesson/" + nextUnit.id }, ["Next: " + nextUnit.name]));
+        actions.appendChild(el("a", { class: "btn secondary", href: "#/practice?topic=" + (summary.topic || nextUnit.id) }, ["Try another set"]));
+      } else {
+        var again = summary.topic ? "#/practice?topic=" + summary.topic : "#/tests";
+        actions.appendChild(el("a", { class: "btn", href: again }, ["Try another set"]));
+        actions.appendChild(el("a", { class: "btn secondary", href: "#/tests" }, ["Back to tests"]));
+      }
+    }
+    wrap.appendChild(actions);
     wrap.appendChild(el("h2", null, ["Missed questions"]));
     if (!summary.missed.length) wrap.appendChild(el("p", null, ["None."]));
     summary.missed.slice(0, 30).forEach(function (id) {
@@ -999,7 +1032,7 @@
       ]);
       btn.addEventListener("click", function () {
         selected = item.z;
-        apply();
+        apply(false);
         btn.scrollIntoView({ inline: "center", block: "nearest" });
       });
       buttons[item.z] = btn;
@@ -1031,7 +1064,11 @@
       if (item.symbol.toLowerCase() === q.toLowerCase()) return true;
       return item.name.toLowerCase().indexOf(q.toLowerCase()) === 0;
     }
-    function apply() {
+    function pinTableLeft() {
+      var scroller = page.querySelector(".ptable-wrap");
+      if (scroller) scroller.scrollLeft = 0;
+    }
+    function apply(pinLeft) {
       var q = query();
       page.classList.toggle("searching", q.length > 0);
       grid.classList.toggle("filtering", !!filter);
@@ -1083,17 +1120,19 @@
         if (item.z === selected) row.className = "is-selected";
         row.addEventListener("click", function () {
           selected = item.z;
-          apply();
+          apply(false);
           if (buttons[item.z]) buttons[item.z].scrollIntoView({ inline: "center", block: "nearest" });
         });
         list.appendChild(el("li", null, [row]));
       });
       var count = document.getElementById("el-count");
       if (count) count.textContent = shown.length + (shown.length === 1 ? " element" : " elements");
+      if (pinLeft !== false) pinTableLeft();
     }
     search.querySelector("input").addEventListener("input", apply);
     show(page);
     apply();
+    pinTableLeft();
   }
   function cellPos(item) {
     if (item.z >= 57 && item.z <= 71) return { row: 9, col: 3 + (item.z - 57) };
