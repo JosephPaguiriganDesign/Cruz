@@ -513,10 +513,12 @@ td.num, th.num { white-space: nowrap; text-align: right; font-family: var(--font
 .flag:hover { background: var(--well); color: var(--ink); }
 .flag-ico { display: inline-grid; place-items: center; width: 18px; height: 18px; flex: none; }
 .flag-ico svg { display: block; }
+/* On: still an outline cell — filled pennant + the word, never a solid ink fill. */
 .flag[aria-pressed="true"] {
-  background: var(--ink); color: var(--paper); border-color: var(--ink);
+  background: var(--card); color: var(--ink); border-color: var(--ink);
 }
-.flag[aria-pressed="true"]:hover { background: var(--ink); color: var(--paper); }
+.flag[aria-pressed="true"]:hover { background: var(--well); color: var(--ink); }
+.flag[aria-pressed="true"] .flag-ico .pennant { fill: currentColor; }
 .flag:focus-visible { outline-offset: 2px; }
 
 /* ---------- Question number nav ------------------------------------------ */
@@ -552,20 +554,22 @@ a.qcell.is-answered:hover { background: #2c3038; color: var(--paper); }
   border-width: 3px; z-index: 1; font-weight: 700;
 }
 .qcell.is-answered[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--paper); }
-/* Flagged: a folded corner. Paper-coloured on a filled cell so it still reads. */
+/* Flagged: a 16px folded corner — large enough to read on ink fills at 375.
+   Paper on ink, ink on paper. Number is nudged off the fold. */
 .qcell.is-flagged::after {
-  content: ""; position: absolute; top: -1px; right: -1px;
-  border-style: solid; border-width: 0 11px 11px 0;
+  content: ""; position: absolute; top: 0; right: 0; z-index: 1;
+  width: 0; height: 0;
+  border-style: solid; border-width: 0 16px 16px 0;
   border-color: var(--ink) var(--ink) transparent transparent;
 }
 .qcell.is-answered.is-flagged::after {
   border-color: var(--paper) var(--paper) transparent transparent;
 }
+.qcell.is-flagged { padding: 2px 8px 0 0; }
 .qcell:focus-visible { outline-offset: 3px; }
-.qnav-key { margin: 0 0 var(--s4); gap: var(--s4) var(--s5); }
+.qnav-key { margin: 0 0 var(--s4); gap: var(--s4) var(--s5); align-items: center; }
 .qnav-key li { gap: var(--s2); }
-.qnav-key .qcell { width: 28px; height: 28px; font-size: 13px; pointer-events: none; }
-.qnav-key .qcell.is-flagged::after { border-width: 0 8px 8px 0; }
+.qnav-key .qcell { width: 48px; height: 48px; font-size: 16px; pointer-events: none; }
 
 /* ---------- Review-before-submit ----------------------------------------- */
 .notice {

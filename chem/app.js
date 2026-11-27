@@ -355,7 +355,7 @@
         lessonView(id);
       } }, ["Check"]));
     } else {
-      tryRow.appendChild(el("button", { type: "button", class: "secondary", onclick: function () {
+      tryRow.appendChild(el("button", { type: "button", onclick: function () {
         tryState.picked = null;
         tryState.shown = false;
         lessonView(id);
@@ -366,7 +366,7 @@
     var nextLesson = null;
     for (var li = 0; li < LESSONS.length; li++) if (LESSONS[li].id === id && LESSONS[li + 1]) nextLesson = LESSONS[li + 1];
     var cta = el("div", { class: "row" }, [
-      el("a", { class: "btn", href: "#/practice?topic=" + lesson.topic }, ["Practice this unit"])
+      el("a", { class: "btn secondary", href: "#/practice?topic=" + lesson.topic }, ["Practice this unit"])
     ]);
     if (nextLesson) cta.appendChild(el("a", { class: "btn secondary", href: "#/lesson/" + nextLesson.id }, ["Next: " + nextLesson.title]));
     article.appendChild(cta);
@@ -620,7 +620,7 @@
           quiz();
         }
       }, [
-        el("span", { class: "flag-ico", "aria-hidden": "true", html: flagIcon(flagged) }),
+        el("span", { class: "flag-ico", "aria-hidden": "true", html: flagIcon() }),
         el("span", null, [flagged ? "Flagged" : "Flag"])
       ]));
       buttons.appendChild(el("button", { type: "submit" }, [ex.index + 1 >= ex.ids.length ? "Review" : "Next"]));
@@ -660,8 +660,8 @@
     if (timed) armTimer(ex);
   }
 
-  function flagIcon(on) {
-    return '<svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 1.5v13M3.2 2.2h9.2L9.5 5.8l2.9 3.6H3.2z" fill="' + (on ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  function flagIcon() {
+    return '<svg viewBox="0 0 16 16" width="16" height="16"><path class="pennant" d="M3 1.5v13M3.2 2.2h9.2L9.5 5.8l2.9 3.6H3.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
   }
 
   function questionNav(ex, mode) {
