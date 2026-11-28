@@ -1,9 +1,9 @@
 /* Gift lists. Settings live in config.js. Codes are never in this file.
-   Edits lock at the end of 14 Dec 2026 Pacific: 2026-12-15T00:00:00-08:00. */
+   Edits lock at the end of 11 Dec 2026 Pacific: 2026-12-12T00:00:00-08:00. */
 (function (root) {
   "use strict";
 
-  var LOCK_AT = "2026-12-15T00:00:00-08:00";
+  var LOCK_AT = "2026-12-12T00:00:00-08:00";
   var PRIORITIES = { high: "Really want", med: "Would like", low: "Bonus" };
   var LIMITS = { name: 80, note: 140, link: 400, items: 40 };
   var SESSION_KEY = "gifts-session-v1";
@@ -16,7 +16,7 @@
   function lockInstant() {
     var parsed = Date.parse(LOCK_AT);
     if (!isNaN(parsed)) return parsed;
-    return Date.UTC(2026, 11, 15, 8, 0, 0);
+    return Date.UTC(2026, 11, 12, 8, 0, 0);
   }
 
   function isLocked(nowMs) {
@@ -380,7 +380,7 @@
 
   function fillCountdown(node, parts) {
     clear(node);
-    node.appendChild(el("span", { class: "gifts-countdown__label" }, ["Closes December 14"]));
+    node.appendChild(el("span", { class: "gifts-countdown__label" }, ["Closes December 11"]));
     var bits = [];
     parts.forEach(function (part) {
       var chunk = el("span", { class: "gifts-countdown__chunk" });
@@ -545,7 +545,7 @@
     var page = el("div", { class: "gifts-page" });
     page.appendChild(el("h1", { class: "gifts-title" }, ["Who's here?"]));
     page.appendChild(el("p", { class: "gifts-lede" }, [
-      "Each adult sees one kid's list. Kids can change their own list until December 14."
+      "Each adult sees one kid's list. Kids can change their own list until December 11."
     ]));
     if (!scriptUrl() && !isDemo()) {
       page.appendChild(el("p", { class: "gifts-setup" }, [
@@ -555,22 +555,9 @@
       showMain(page, focus);
       return;
     }
-    page.appendChild(el("a", { class: "gifts-jump", href: "#gifts-adult-form" }, ["Grown-ups: enter your code ↓"]));
     page.appendChild(kidGate());
     page.appendChild(adultGate());
-    var jump = location.hash === "#gifts-adult-form";
-    showMain(page, focus && !jump);
-    if (jump) focusAdultCode();
-  }
-
-  function focusAdultCode() {
-    var form = document.getElementById("gifts-adult-form");
-    var field = document.getElementById("gifts-adult-code");
-    if (form && form.scrollIntoView) {
-      try { form.scrollIntoView({ block: "start" }); }
-      catch (err) { form.scrollIntoView(); }
-    }
-    if (field) field.focus();
+    showMain(page, focus);
   }
 
   function kidGate() {
@@ -611,14 +598,16 @@
     gate.appendChild(el("h2", null, ["Adults"]));
     gate.appendChild(el("p", { class: "gifts-lede" }, ["Enter your code. It opens one list."]));
     var form = el("form", { id: "gifts-adult-form" });
-    form.appendChild(field("gifts-adult-code", "Your code", {
+    var code = field("gifts-adult-code", "Your code", {
       name: "code",
       required: true,
       maxlength: 32,
       autocomplete: "off",
       autocapitalize: "characters",
       spellcheck: false
-    }));
+    });
+    code.insertBefore(el("h3", null, ["Grown-ups: enter your code"]), code.firstChild);
+    form.appendChild(code);
     form.appendChild(el("button", { type: "submit", class: "gifts-enter" }, ["See the list"]));
     gate.appendChild(form);
     return gate;
@@ -658,7 +647,7 @@
     var page = el("div", { class: "gifts-page" });
     page.appendChild(el("h1", { class: "gifts-title" }, ["My list"]));
     page.appendChild(el("p", { class: "gifts-lead" }, [
-      viewLocked() ? "You can still look. Nothing can be changed." : "Add a gift, or change one, until December 14."
+      viewLocked() ? "You can still look. Nothing can be changed." : "Add a gift, or change one, until December 11."
     ]));
     page.appendChild(kidSection({ name: name, items: items }, true));
     return page;
@@ -878,7 +867,7 @@
       }
       rememberLock(data);
       if (viewLocked()) {
-        setStatus("Lists locked Dec 14.", "error");
+        setStatus("Lists locked Dec 11.", "error");
         go("#/mine");
         return;
       }
@@ -933,7 +922,7 @@
       }
       if (route.name === "edit") {
         if (viewLocked()) {
-          setStatus("Lists locked Dec 14.", "error");
+          setStatus("Lists locked Dec 11.", "error");
           go("#/mine");
           return;
         }
@@ -1092,7 +1081,7 @@
       return { ok: false, error: "That code cannot change this list." };
     }
     var items = demoItems();
-    if (viewLocked()) return { ok: false, locked: true, error: "Lists locked Dec 14." };
+    if (viewLocked()) return { ok: false, locked: true, error: "Lists locked Dec 11." };
     if (action === "add") {
       if (itemsFor(items, session.kid).length >= LIMITS.items) return { ok: false, error: "That list is full." };
       items.push({
@@ -1126,7 +1115,7 @@
   function submitItem(form) {
     if (busy) return;
     if (viewLocked()) {
-      setStatus("Lists locked Dec 14.", "error");
+      setStatus("Lists locked Dec 11.", "error");
       return;
     }
     var picked = form.querySelector("input[name=priority]:checked");
@@ -1178,7 +1167,7 @@
 
   function removeById(id, name) {
     if (!id || viewLocked()) {
-      if (viewLocked()) setStatus("Lists locked Dec 14.", "error");
+      if (viewLocked()) setStatus("Lists locked Dec 11.", "error");
       return;
     }
     if (!window.confirm("Remove " + name + " from your list?")) return;
@@ -1223,14 +1212,6 @@
   }
 
   function onClick(event) {
-    var jumpLink = event.target.closest ? event.target.closest("a.gifts-jump") : null;
-    if (jumpLink) {
-      if (location.hash === "#gifts-adult-form") {
-        event.preventDefault();
-        focusAdultCode();
-      }
-      return;
-    }
     var btn = event.target.closest ? event.target.closest("button") : null;
     if (!btn) return;
     if (btn.classList.contains("gifts-demo-start")) {

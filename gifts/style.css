@@ -5,29 +5,29 @@
 /* ---------- Fonts (self-hosted, subset) -------------------------------- */
 @font-face {
   font-family: "Fraunces";
-  src: url("fonts/fraunces-700.woff2") format("woff2");
-  font-weight: 700;
+  src: url("fonts/fraunces-800.woff2") format("woff2");
+  font-weight: 800;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Fraunces";
-  src: url("fonts/fraunces-700i.woff2") format("woff2");
-  font-weight: 700;
+  src: url("fonts/fraunces-800i.woff2") format("woff2");
+  font-weight: 800;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Lexend";
-  src: url("fonts/lexend-400.woff2") format("woff2");
-  font-weight: 400;
+  src: url("fonts/lexend-500.woff2") format("woff2");
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Lexend";
-  src: url("fonts/lexend-600.woff2") format("woff2");
-  font-weight: 600;
+  src: url("fonts/lexend-700.woff2") format("woff2");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -101,7 +101,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
-  font-weight: 400;
+  font-weight: 500;
   font-size: var(--fs-body);
   line-height: 1.45;
   min-height: 100vh;
@@ -117,9 +117,9 @@ a { color: inherit; }
 img, svg { display: block; max-width: 100%; }
 
 h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
-.gifts-countdown__num, .gifts-locknote, .gifts-back, .gifts-kids .gifts-choice {
+.gifts-countdown__num, .gifts-locknote, .gifts-kids .gifts-choice {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-style: normal;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -140,7 +140,7 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
   min-height: var(--tap);
   display: inline-flex;
   align-items: center;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
 }
 .gifts-skip:focus { top: var(--s4); }
@@ -299,7 +299,7 @@ body[data-view="one"] .gifts-status {
   top: calc(-5.75rem + 8px);
   font-family: var(--font-display);
   font-style: italic;
-  font-weight: 700;
+  font-weight: 800;
   font-size: var(--fs-to);
   line-height: 0.84;
   letter-spacing: -0.04em;
@@ -365,25 +365,7 @@ body[data-view="one"] .gifts-status {
   gap: var(--s2);
 }
 
-/* Cruz name chip — secondary, not a wax action */
-.gifts-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--tap);
-  min-width: var(--tap);
-  padding: 8px 12px;
-  border: var(--b) solid var(--ink);
-  background: var(--tag);
-  color: var(--ink);
-  text-decoration: none;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.gifts-back:hover { background: var(--well); }
-
-/* Countdown — typographic, not a widget. Keep the app's "Closes December 14". */
+/* Countdown — typographic, not a widget. Keep the app's "Closes December 11". */
 .gifts-countdown {
   display: flex;
   flex-wrap: wrap;
@@ -395,7 +377,7 @@ body[data-view="one"] .gifts-status {
 .gifts-countdown__label {
   flex: 1 0 100%;
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -407,7 +389,7 @@ body[data-view="one"] .gifts-status {
   align-items: flex-start;
   color: var(--ink-2);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1.2;
@@ -419,7 +401,7 @@ body[data-view="one"] .gifts-status {
   letter-spacing: -0.04em;
   color: var(--ink);
   text-transform: none;
-  font-weight: 700;
+  font-weight: 800;
 }
 .gifts-countdown__unit { margin-top: 0; }
 
@@ -436,7 +418,7 @@ body[data-view="one"] .gifts-status {
   color: var(--ink);
   font-family: var(--font-display);
   font-style: italic;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 22px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -470,7 +452,7 @@ body[data-view="one"] .gifts-status {
   padding: 12px 14px;
   border: var(--b) solid var(--ink);
   background: var(--well);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
 }
 .gifts-status.is-saving:not(:empty) { background: var(--well); color: var(--ink); }
@@ -489,7 +471,7 @@ body[data-view="one"] .gifts-status {
   height: 28px;
   border: 2px solid currentColor;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 18px;
   line-height: 1;
 }
@@ -518,7 +500,7 @@ body[data-view="one"] .gifts-status {
   color: var(--white);
   box-shadow: 0 3px 0 var(--wax-deep);
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 18px;
   line-height: 1.2;
   text-align: center;
@@ -546,7 +528,7 @@ body[data-view="one"] .gifts-status {
 .gifts-add::before {
   content: "+";
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1.35em;
   line-height: 1;
 }
@@ -567,7 +549,7 @@ body[data-view="one"] .gifts-status {
   background: var(--tag);
   color: var(--ink);
   border: var(--b) solid var(--ink);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 16px;
   text-decoration: none;
 }
@@ -604,7 +586,7 @@ body[data-view="one"] .gifts-status {
 }
 .gifts-gate h2 {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 24px;
   letter-spacing: -0.03em;
   margin: 0 0 4px;
@@ -627,7 +609,7 @@ body[data-view="one"] .gifts-status {
 #gifts-priority legend,
 .gifts-field label {
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-label);
   color: var(--ink);
   letter-spacing: 0;
@@ -683,11 +665,23 @@ body[data-view="one"] .gifts-status {
 }
 
 .gifts-field { display: grid; gap: 6px; margin: 0 0 var(--s4); }
+.gifts-field > h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  font-size: var(--fs-item);
+  color: var(--ink);
+  text-decoration: none;
+}
 .gifts-field > label {
   display: flex;
   align-items: flex-end;
   min-height: 44px;
 }
+.gifts-field > h3 + label { min-height: 0; align-items: flex-start; }
 .gifts-field input,
 .gifts-form input[type="text"],
 .gifts-form input[type="url"],
@@ -729,7 +723,7 @@ body[data-view="one"] .gifts-status {
 }
 .gifts-kid__count {
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -755,7 +749,7 @@ body[data-view="one"] .gifts-kid__name {
 .gifts-one__title {
   margin: 0 0 var(--s3);
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-style: normal;
   font-size: 18px;
   letter-spacing: 0;
@@ -765,7 +759,7 @@ body[data-view="one"] .gifts-kid__name {
 }
 .gifts-one__name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1.25em;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -828,7 +822,7 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   align-items: center;
   gap: 8px;
   order: -1;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
   color: var(--ink);
   letter-spacing: 0.01em;
@@ -864,7 +858,7 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
 }
 
 .gifts-item__name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-item);
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -881,7 +875,7 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   min-width: var(--tap);
   padding: 4px 0;
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 16px;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
@@ -940,7 +934,7 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   min-height: var(--tap);
   padding: 14px 40px 10px 52px;
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 16px;
   letter-spacing: 0;
   cursor: pointer;
@@ -1063,5 +1057,3 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   .gifts-locknote { transform: none; }
 }
 
-.gifts-jump{display:inline-flex;align-items:center;min-height:44px;color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:2px}
-.gifts-jump:focus-visible{outline:3px solid var(--wax);outline-offset:3px}

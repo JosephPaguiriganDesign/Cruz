@@ -12,7 +12,7 @@ Every piece of UI is a gift tag: a cream die-cut card with a punched hole, a 2px
 - **Kids.** Each child’s name is set like the “To:” line on a tag, in Fraunces. That is how adults find the right list. Empty kids on the adult overview compact to a single name + “0 items” row so eleven kids stay scannable.
 - **Items.** Each wish is a tag. The item name is the largest thing on it. Priority keeps the app’s words — **Really want / Would like / Bonus** — plus 3 / 2 / 1 ink bars. Never colour alone. A link, if present, is the app’s “Open link” text, underlined, not an icon.
 - **Adding.** The kid’s list is led by one large wax-red **Add something** button. The form is a blank tag with a centred hole: real labels, a required name, optional link, optional size or note, and priority as radio buttons made of the same word-plus-bars.
-- **Lock.** Before the deadline, a typographic countdown sits in the header under the app’s line “Closes December 14”. After the deadline, the countdown is replaced by an ink date stamp on `.gifts-locknote` that keeps the copy **Lists locked Dec 14**. Edit controls go away.
+- **Lock.** Before the deadline, a typographic countdown sits in the header under the app’s line “Closes December 11”. After the deadline, the countdown is replaced by an ink date stamp on `.gifts-locknote` that keeps the copy **Lists locked Dec 11**. Edit controls go away.
 - **Sample mode.** The demo banner, “Preview locked lists”, and “Leave sample” stay quiet and secondary. They are never wax. “Look at a sample” on the unconfigured intro is the one wax primary on that screen.
 - **Ground.** Kraft paper. Cream tags. Warm black ink. Square corners except the 45° top chamfers on tags. No gradients, no snowflakes, no Santa hats, no candy-cane stripes, no emoji decoration, no illustrated people. Sealing-wax red (`#8a1f2c`) is the one action colour: primary buttons and focus rings. It is not used for priority, errors, or decoration.
 
@@ -44,9 +44,9 @@ Priority does not get its own colour. High, medium and low are told by the words
 
 ### Type
 
-- **Display.** `--font-display`: Fraunces 700 (self-hosted, OFL). Roman for kid names, countdown numerals, the lock stamp, and headings. Italic for the cropped “To:”. The cut is a display optical size (opsz 144) with a little softness and wonk.
-- **Body.** `--font-body`: Lexend 400 and 600 (self-hosted, OFL). UI, forms, item names, notes, and buttons. Fallback is system-ui.
-- **Files.** `fraunces-700.woff2`, `fraunces-700i.woff2`, `lexend-400.woff2`, `lexend-600.woff2`, plus OFL licences in `fonts/`. Latin + typographic punctuation subset, 60.9 KB woff2 total. Preloaded from `index.html`.
+- **Display.** `--font-display`: Fraunces 800 (self-hosted, OFL). Roman for kid names, countdown numerals, the lock stamp, and headings. Italic for the cropped “To:”. The cut is a display optical size (opsz 144) with a little softness and wonk.
+- **Body.** `--font-body`: Lexend 500 and 700 (self-hosted, OFL). UI, forms, item names, notes, and buttons. Fallback is system-ui.
+- **Files.** `fraunces-800.woff2`, `fraunces-800i.woff2`, `lexend-500.woff2`, `lexend-700.woff2`, plus OFL licences in `fonts/`. Latin + typographic punctuation subset. Preloaded from `index.html`.
 - **Sizes.** 375 → ≥900px:
   - body 18
   - item name 20 → 22
@@ -55,7 +55,7 @@ Priority does not get its own colour. High, medium and low are told by the words
   - “To:” 100 → 160 (CSS-only, decorative, `content: "To:" / ""` so screen readers do not announce it)
   - brand “Gift lists” 28 → 32
   - countdown numerals 36 → 48
-  - labels 15 (Lexend 600). Never go below 14px for any meaning, or 16px for input text (iOS zoom).
+  - labels 15 (Lexend 700). Never go below 14px for any meaning, or 16px for input text (iOS zoom).
 - **Inputs** are 18px, same as body.
 
 ### Space and shape
@@ -84,8 +84,8 @@ The stylesheet is written to the real markup. No `.gifts-tag` wrappers or hole s
 - `.gifts-brand` is the “Gift lists” wordmark (`href="#/"`).
 - `.gifts-signout` (“Sign out”) is a quiet outline, shown once a role is set.
 - `.gifts-back` is the CRUZ name chip (`href="../"`, text “Cruz”).
-- `.gifts-countdown` with `__label` (“Closes December 14”), `__chunk`, `__num`, `__unit`.
-- `#gifts-locknote.gifts-locknote` — exact copy “Lists locked Dec 14”. Styled as a slightly rotated ink stamp (rotation dropped under `prefers-reduced-motion`).
+- `.gifts-countdown` with `__label` (“Closes December 11”), `__chunk`, `__num`, `__unit`.
+- `#gifts-locknote.gifts-locknote` — exact copy “Lists locked Dec 11”. Styled as a slightly rotated ink stamp (rotation dropped under `prefers-reduced-motion`).
 
 ### Sample banner
 
@@ -132,6 +132,6 @@ Intro (no sheet), sample sign-in (kid name selected), adult one (Cruz, open and 
 
 ## Open notes
 
-- The production lock instant is `2026-12-15T00:00:00-08:00` in `app.js` (the end of 14 Dec 2026, America/Los_Angeles). The stamp copy stays “Lists locked Dec 14”.
+- The production lock instant is `2026-12-12T00:00:00-08:00` in `app.js` (the end of 11 Dec 2026, America/Los_Angeles). The stamp copy stays “Lists locked Dec 11”.
 - Favicon `../favicon.svg` 404s when only `gifts/` is served; it is a local request and fine.
 - If Cruz Engineer later adds a `.gifts-mast` node, the CSS-only “To:” can be retired in favour of real markup. It is not required.

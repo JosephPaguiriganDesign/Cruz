@@ -7,7 +7,7 @@
  * Do not paste codes into the website. Responses never include codes.
  *
  * Kid names must stay in the same order as gifts/config.js.
- * Edits lock at the end of 14 Dec 2026 Pacific (PST, UTC-8).
+ * Edits lock at the end of 11 Dec 2026 Pacific (PST, UTC-8).
  */
 var KIDS = [
   "Cruz",
@@ -23,7 +23,7 @@ var KIDS = [
   "Emmett"
 ];
 
-var LOCK_AT = "2026-12-15T00:00:00-08:00";
+var LOCK_AT = "2026-12-12T00:00:00-08:00";
 var CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 var CODE_LENGTH = 6;
 var NAME_MAX = 80;
@@ -148,9 +148,9 @@ function doPost(e) {
     if (!kid || kid === "ADMIN" || !kidOk(kid, body && body.code)) {
       return json({ ok: false, error: "That name and code do not match." });
     }
-    if (isLocked()) return json({ ok: false, locked: true, error: "Lists locked Dec 14." });
+    if (isLocked()) return json({ ok: false, locked: true, error: "Lists locked Dec 11." });
     return json(withLock(function () {
-      if (isLocked()) return { ok: false, locked: true, error: "Lists locked Dec 14." };
+      if (isLocked()) return { ok: false, locked: true, error: "Lists locked Dec 11." };
       return writeItem(kid, body);
     }));
   } catch (err) {
@@ -419,7 +419,7 @@ function randomCode() {
 function lockInstant() {
   var parsed = Date.parse(LOCK_AT);
   if (!isNaN(parsed)) return parsed;
-  return Date.UTC(2026, 11, 15, 8, 0, 0);
+  return Date.UTC(2026, 11, 12, 8, 0, 0);
 }
 
 function isLocked() {

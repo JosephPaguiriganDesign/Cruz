@@ -4,7 +4,7 @@ A small site at `/gifts/` for the family wish lists. Each adult is the secret sa
 
 The page is plain HTML, CSS, and JavaScript. The lists live in a private Google Sheet. A Google Apps Script web app reads and writes that sheet. GitHub Pages only serves the page, so the script is what rejects edits after the deadline.
 
-Edits lock at the end of December 14, 2026, Pacific time (`2026-12-15T00:00:00-08:00`, which is midnight at the start of December 15, Pacific Standard Time). After that, everyone can still look. The script refuses saves.
+Edits lock at the end of December 11, 2026, Pacific time (`2026-12-12T00:00:00-08:00`, which is midnight at the start of December 12, Pacific Standard Time). After that, everyone can still look. The script refuses saves.
 
 ## Names
 

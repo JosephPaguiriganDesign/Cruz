@@ -58,11 +58,11 @@ There is no `.is-editing` class. The edit screen is `data-view="edit"`.
 | `#gifts-signout.gifts-signout` | `button` | Clears the session |
 | `.gifts-back` | `a` | Back to the Cruz home page |
 | `#gifts-countdown.gifts-countdown` | `p` | Countdown. `aria-label` is a full sentence |
-| `.gifts-countdown__label` | `span` | "Closes December 14" |
+| `.gifts-countdown__label` | `span` | "Closes December 11" |
 | `.gifts-countdown__chunk` | `span` | Wraps one number and its unit |
 | `.gifts-countdown__num` | `span` | The number |
 | `.gifts-countdown__unit` | `span` | `day(s)`, `hour(s)`, `minute(s)`, or `second(s)` |
-| `#gifts-locknote.gifts-locknote` | `p` | Exact text: `Lists locked Dec 14` |
+| `#gifts-locknote.gifts-locknote` | `p` | Exact text: `Lists locked Dec 11` |
 | `#gifts-demo.gifts-demo` | `div` | Sample banner |
 | `.gifts-demo__text` | `p` | Sample explanation |
 | `.gifts-preview-lock` | `button` | Toggles the locked preview in the sample only |
@@ -96,13 +96,13 @@ While the countdown is more than a day away it shows days, hours, and minutes. U
 | `.gifts-choice` | `label` wrapping a radio |
 | `#gifts-kid-<lowercase name>` | Each name radio. `name="kid"` `value` is the name |
 | `#gifts-edit-code` | The kid's edit code. Label: "Your code" |
-| `#gifts-adult-form` | Adult form. One field. The jump link's target |
-| `#gifts-adult-code` | Adult code. Label text is exactly `Your code`. Focused when the jump link is used |
-| `.gifts-jump` | `a` directly under the sign-in lede. `href="#gifts-adult-form"`. Text: `Grown-ups: enter your code ↓`. Scrolling to the form also focuses `#gifts-adult-code` |
+| `#gifts-adult-form` | Adult form. One field |
+| `#gifts-adult-code` | Adult code. Label text is exactly `Your code` |
+| `#gifts-adult-form h3` | Plain heading inside the adult code field, directly above the `Your code` label. Text: `Grown-ups: enter your code`. Not a link or button |
 | `.gifts-enter` | Submit for either sign-in form |
 | `.gifts-field` | Label + input pair |
 
-The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`. `.gifts-jump` is styled at the end of `gifts/style.css` with `var(--ink)` and `var(--wax)`.
+The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`. The adult field heading uses Fraunces at `--fs-item`, ink on the tag, with no underline.
 
 ## Adult single list (`data-view="one"`)
 
@@ -203,7 +203,7 @@ At most 40 gifts per kid.
 | `scriptUrl` | Apps Script web app URL ending in `/exec`. Empty until Joseph pastes it |
 | `kids` | Names in list order. No codes |
 
-`gifts/app.js` holds the lock instant `2026-12-15T00:00:00-08:00` and the same rules the script enforces. The only codes in that file are the sample words (`cruz-view`, `cruz-edit`, `sample-admin`, and the same pattern for each kid). They work only while `scriptUrl` is empty.
+`gifts/app.js` holds the lock instant `2026-12-12T00:00:00-08:00` and the same rules the script enforces. The only codes in that file are the sample words (`cruz-view`, `cruz-edit`, `sample-admin`, and the same pattern for each kid). They work only while `scriptUrl` is empty.
 
 ## Storage in the browser
 
@@ -262,6 +262,6 @@ Reads work before and after the lock.
 
 Success: `{ ok: true, locked: false, items }`.
 
-After the deadline: `{ ok: false, locked: true, error: "Lists locked Dec 14." }` and nothing is written.
+After the deadline: `{ ok: false, locked: true, error: "Lists locked Dec 11." }` and nothing is written.
 
 Reads still work after the lock.
