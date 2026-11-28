@@ -543,7 +543,7 @@
   function drawSignin() {
     var focus = setView("signin");
     var page = el("div", { class: "gifts-page" });
-    page.appendChild(el("h1", { class: "gifts-title" }, ["Gift lists"]));
+    page.appendChild(el("h1", { class: "gifts-title" }, ["Who's here?"]));
     page.appendChild(el("p", { class: "gifts-lede" }, [
       "Each adult sees one kid's list. Kids can change their own list until December 14."
     ]));
@@ -555,9 +555,22 @@
       showMain(page, focus);
       return;
     }
+    page.appendChild(el("a", { class: "gifts-jump", href: "#gifts-adult-form" }, ["Grown-ups: enter your code ↓"]));
     page.appendChild(kidGate());
     page.appendChild(adultGate());
-    showMain(page, focus);
+    var jump = location.hash === "#gifts-adult-form";
+    showMain(page, focus && !jump);
+    if (jump) focusAdultCode();
+  }
+
+  function focusAdultCode() {
+    var form = document.getElementById("gifts-adult-form");
+    var field = document.getElementById("gifts-adult-code");
+    if (form && form.scrollIntoView) {
+      try { form.scrollIntoView({ block: "start" }); }
+      catch (err) { form.scrollIntoView(); }
+    }
+    if (field) field.focus();
   }
 
   function kidGate() {
@@ -1210,6 +1223,14 @@
   }
 
   function onClick(event) {
+    var jumpLink = event.target.closest ? event.target.closest("a.gifts-jump") : null;
+    if (jumpLink) {
+      if (location.hash === "#gifts-adult-form") {
+        event.preventDefault();
+        focusAdultCode();
+      }
+      return;
+    }
     var btn = event.target.closest ? event.target.closest("button") : null;
     if (!btn) return;
     if (btn.classList.contains("gifts-demo-start")) {

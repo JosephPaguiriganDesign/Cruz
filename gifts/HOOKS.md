@@ -70,7 +70,7 @@ There is no `.is-editing` class. The edit screen is `data-view="edit"`.
 | `#gifts-status.gifts-status` | `p` | The only status node. `role="status"` `aria-live="polite"` `aria-atomic="true"` |
 | `#gifts-main.gifts-main` | `main` | Swapped content. `tabindex="-1"`. `aria-busy="true"` while a list is loading |
 | `.gifts-page` | `div` | Wrapper inside main |
-| `.gifts-title` | `h1` | Page title on sign-in, admin, kid, and edit |
+| `.gifts-title` | `h1` | Page title. On sign-in the text is `Who's here?` so it does not repeat the masthead |
 | `.gifts-one__title` | `h1` | Adult single-list heading. Text is `You're `, the name span, then `'s secret santa` |
 | `.gifts-one__name` | `span` | The one kid's name inside `.gifts-one__title` |
 | `.gifts-lede` | `p` | Read-only note on the single-list view and the admin view |
@@ -96,12 +96,13 @@ While the countdown is more than a day away it shows days, hours, and minutes. U
 | `.gifts-choice` | `label` wrapping a radio |
 | `#gifts-kid-<lowercase name>` | Each name radio. `name="kid"` `value` is the name |
 | `#gifts-edit-code` | The kid's edit code. Label: "Your code" |
-| `#gifts-adult-form` | Adult form. One field |
-| `#gifts-adult-code` | Adult code. Label text is exactly `Your code` |
+| `#gifts-adult-form` | Adult form. One field. The jump link's target |
+| `#gifts-adult-code` | Adult code. Label text is exactly `Your code`. Focused when the jump link is used |
+| `.gifts-jump` | `a` directly under the sign-in lede. `href="#gifts-adult-form"`. Text: `Grown-ups: enter your code ↓`. Scrolling to the form also focuses `#gifts-adult-code` |
 | `.gifts-enter` | Submit for either sign-in form |
 | `.gifts-field` | Label + input pair |
 
-The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`.
+The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`. `.gifts-jump` is styled at the end of `gifts/style.css` with `var(--ink)` and `var(--wax)`.
 
 ## Adult single list (`data-view="one"`)
 

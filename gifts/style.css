@@ -1062,3 +1062,6 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   .gifts-demo-start:active { transform: none; }
   .gifts-locknote { transform: none; }
 }
+
+.gifts-jump{display:inline-flex;align-items:center;min-height:44px;color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:2px}
+.gifts-jump:focus-visible{outline:3px solid var(--wax);outline-offset:3px}
