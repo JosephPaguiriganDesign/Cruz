@@ -117,7 +117,7 @@ a { color: inherit; }
 img, svg { display: block; max-width: 100%; }
 
 h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
-.gifts-countdown__num, .gifts-locknote, .gifts-back, .gifts-kids .gifts-choice {
+.gifts-countdown__num, .gifts-locknote, .gifts-kids .gifts-choice {
   font-family: var(--font-display);
   font-weight: 700;
   font-style: normal;
@@ -364,24 +364,6 @@ body[data-view="one"] .gifts-status {
   align-items: center;
   gap: var(--s2);
 }
-
-/* Cruz name chip — secondary, not a wax action */
-.gifts-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--tap);
-  min-width: var(--tap);
-  padding: 8px 12px;
-  border: var(--b) solid var(--ink);
-  background: var(--tag);
-  color: var(--ink);
-  text-decoration: none;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.gifts-back:hover { background: var(--well); }
 
 /* Countdown — typographic, not a widget. Keep the app's "Closes December 14". */
 .gifts-countdown {
