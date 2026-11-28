@@ -124,7 +124,7 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
-.gifts-title, .gifts-one__title { font-size: var(--fs-h1); text-wrap: balance; margin: 0 0 var(--s3); }
+.gifts-title { font-size: var(--fs-h1); text-wrap: balance; margin: 0 0 var(--s3); }
 .gifts-lead, .gifts-lede, .gifts-setup, .gifts-loading { margin: 0 0 var(--s5); max-width: var(--measure); }
 .gifts-setup, .gifts-lead, .gifts-lede, .gifts-loading, .gifts-kid__count { color: var(--ink-2); }
 
@@ -157,6 +157,7 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
    stay visible. Holes are punched with a mask so kraft shows through. */
 .gifts-item,
 .gifts-form,
+.gifts-gate,
 .gifts-choice {
   position: relative;
   isolation: isolate;
@@ -167,6 +168,8 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
 .gifts-item::after,
 .gifts-form::before,
 .gifts-form::after,
+.gifts-gate::before,
+.gifts-gate::after,
 .gifts-choice::before,
 .gifts-choice::after {
   content: "";
@@ -176,6 +179,7 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
 }
 .gifts-item::before,
 .gifts-form::before,
+.gifts-gate::before,
 .gifts-choice::before {
   inset: 0;
   background: var(--ink);
@@ -190,6 +194,7 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
 }
 .gifts-item::after,
 .gifts-form::after,
+.gifts-gate::after,
 .gifts-choice::after {
   inset: var(--b) var(--b) var(--b) var(--face-inset-left);
   background: var(--face);
@@ -590,20 +595,33 @@ body[data-view="one"] .gifts-status {
 }
 
 /* ---------- Sign-in --------------------------------------------------- */
-.gifts-gate { margin: 0 0 var(--s6); }
+/* Each gate is its own tag (chamfer + 2px ink rule, no hole, so the
+   heading stays short and the adult field stays closer to the fold). */
+.gifts-gate {
+  --face: var(--tag);
+  margin: 0 0 var(--s5);
+  padding: 18px 16px 16px;
+}
 .gifts-gate h2 {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 28px;
+  font-size: 24px;
   letter-spacing: -0.03em;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 }
-.gifts-gate .gifts-lead, .gifts-gate .gifts-lede { margin-bottom: var(--s4); }
+.gifts-gate .gifts-lead, .gifts-gate .gifts-lede { margin-bottom: var(--s3); }
+/* Wax submit sits inside its gate tag. Keep it full-width of that tag
+   so the two primaries stay visually attached to their own forms. */
+.gifts-gate .gifts-enter { width: 100%; min-width: 0; margin-top: 2px; }
 
 .gifts-kids {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s2);
-  margin: 0 0 var(--s5);
+  margin: 0 0 var(--s4);
+}
+.gifts-kids legend {
+  grid-column: 1 / -1;
 }
 .gifts-kids legend,
 #gifts-priority legend,
@@ -616,25 +634,41 @@ body[data-view="one"] .gifts-status {
   text-transform: none;
 }
 
-/* Name radios — tag-shaped, Fraunces, selected is a heavier ink inset */
+/* Compact chamfered name tags. Selected: wax ring + well fill + ink ✓,
+   same language as the priority options. Focus ring stays the ink outline. */
 .gifts-kids .gifts-choice {
   --face: var(--tag);
+  --cut: 10px;
+  --cut-in: calc(var(--cut) - var(--b) * 0.5858);
+  --check-size: 0 0;
+  --check-pos: right 8px center;
+  --check-img: none;
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 64px;
-  padding: 14px 16px 12px 20px;
-  font-size: 32px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 8px 28px 8px 10px;
+  font-size: 22px;
   letter-spacing: -0.03em;
   line-height: 1;
   cursor: pointer;
   color: var(--ink);
 }
+.gifts-kids .gifts-choice::after {
+  background-color: var(--face);
+  background-repeat: no-repeat;
+  background-size: var(--check-size);
+  background-position: var(--check-pos);
+  background-image: var(--check-img);
+}
 .gifts-kids .gifts-choice:hover { --face: var(--well); }
 .gifts-kids .gifts-choice:has(input:checked) {
   --face: var(--well);
-  --face-inset-left: 6px;
+  --check-size: 14px 14px;
+  --check-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%231c1612' stroke-width='2.2' stroke-linecap='square' stroke-linejoin='miter' d='M2.5 8.2 6.2 12 13.5 3.5'/%3E%3C/svg%3E");
 }
+.gifts-kids .gifts-choice:has(input:checked)::before { background: var(--wax); }
 .gifts-kids .gifts-choice:has(input:focus-visible) {
   outline: var(--focus);
   outline-offset: var(--focus-off);
@@ -715,6 +749,42 @@ body[data-view="one"] .gifts-kid__name {
   padding-bottom: var(--s2);
   border-bottom: var(--b) solid var(--ink);
 }
+
+/* Adult one-kid view: a calm sentence with the name in Fraunces, then the
+   reused h2 as the large "To:" address line. No wax primary in this view. */
+.gifts-one__title {
+  margin: 0 0 var(--s3);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-style: normal;
+  font-size: 18px;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.gifts-one__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25em;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+body[data-view="one"] .gifts-kid__name {
+  font-size: 56px;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+@media (min-width: 900px) {
+  body[data-view="one"] .gifts-kid__name { font-size: 80px; }
+}
+body[data-view="one"] .gifts-kid__count {
+  margin: 4px 0 var(--s4);
+}
+body[data-view="one"] .gifts-add,
+body[data-view="one"] .gifts-item__actions { display: none; }
 
 /* Empty kids on the adult overview: one compact row so ~11 names scan fast */
 body[data-view="all"] .gifts-kid:has(.gifts-empty) {
@@ -956,7 +1026,10 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   }
 
   .gifts-add { width: auto; min-width: 16rem; }
-  .gifts-kids { grid-template-columns: 1fr 1fr; }
+  .gifts-kids { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .gifts-kids .gifts-choice { font-size: 24px; }
+  .gifts-gate { padding: 22px 20px 18px; }
+  .gifts-gate h2 { font-size: 28px; }
 }
 
 @media (min-width: 900px) and (min-width: 900px) {

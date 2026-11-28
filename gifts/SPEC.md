@@ -72,7 +72,7 @@ The stylesheet is written to the real markup. No `.gifts-tag` wrappers or hole s
 
 ### Root and views
 
-- `data-view="signin" | "all" | "mine" | "edit"` on `body`.
+- `data-view="signin" | "one" | "all" | "mine" | "edit"` on `body`.
 - `data-configured`, `data-demo` on `body`.
 - `.is-locked` on `body` when lists are locked (including sample “Preview locked lists”).
 - There is no `.is-editing`; edit is `data-view="edit"`.
@@ -89,13 +89,14 @@ The stylesheet is written to the real markup. No `.gifts-tag` wrappers or hole s
 
 ### Sample banner
 
-- `#gifts-demo.gifts-demo`. Buttons `.gifts-preview-lock` (“Preview locked lists” / “Preview open lists”) and `.gifts-leave-demo` (“Leave sample”) are secondary ink outlines.
+- `#gifts-demo.gifts-demo`. The banner copy may list sample codes; it stays quiet secondary type (`ink-2`, 16px, a thin rule, never wax). Buttons `.gifts-preview-lock` (“Preview locked lists” / “Preview open lists”) and `.gifts-leave-demo` (“Leave sample”) are secondary ink outlines.
 - `.gifts-demo-start` (“Look at a sample”) is wax; it only appears on the unconfigured intro.
 
 ### Lists, items, form
 
 - `section.gifts-kid` with `__name` and `__count`. `ul.gifts-items`. Empty copy is `.gifts-empty`.
-- Adult overview (`data-view="all"`): empty kids compact via `:has(.gifts-empty)` (name + count on one row, hide the empty message and the empty list). From 900px the overview is a 3-column grid; filled kids (`order: 1`) come first, then empty kids as one compact run (`order: 2`, with the first empty forced to column 1 so they don’t share a row with a leftover filled kid). This is visual only: DOM, heading, and screen-reader order stay the family order from config. Empty sections have no focusable controls, so tab order still follows the visual item tags.
+- Adult single list (`data-view="one"`): narrow column, masthead aligned with main. The `h1.gifts-one__title` is a calm 18px sentence, with `span.gifts-one__name` in Fraunces; the reused `h2.gifts-kid__name` is the large “To:” address line (56px / 80px). `.gifts-lede` stays secondary. No wax primary. The lock stamp is unchanged. Empty lists keep the dashed-tag `.gifts-empty` (“Nothing here yet.”).
+- Adult overview (`data-view="all"`): empty kids compact via `:has(.gifts-empty)` (name + count on one row, hide the empty message and the empty list). From 900px the overview is a 3-column grid; filled kids (`order: 1`) come first, then empty kids as one compact run (`order: 2`, with the first empty forced to column 1 so they don’t share a row with a leftover filled kid). This is visual only: DOM, heading, and screen-reader order stay the family order from config. Empty sections have no focusable controls, so tab order still follows the visual item tags. This view is unchanged from The Tag landing.
 - `.gifts-item[data-priority=high|med|low]`. `.gifts-item__name`, `__note`, `__link` (“Open link”), `__priority` (bars via CSS), `__actions`. `.gifts-edit` / `.gifts-remove` are secondary.
 - `button.gifts-add` is the wax primary on mine (and on a kid section when the signed-in kid can edit).
 - `form.gifts-form#gifts-item-form` is the page at `data-view="edit"`. Fields have real `<label>`s. Priority is `#gifts-priority` radio labels `.gifts-choice`. Actions: `.gifts-save` (wax) and `.gifts-cancel` (outline).
@@ -103,7 +104,10 @@ The stylesheet is written to the real markup. No `.gifts-tag` wrappers or hole s
 ### Sign-in
 
 - `#gifts-kid-form` and `#gifts-adult-form` are not `.gifts-form`. Submits are `.gifts-enter` (wax). Name radios are `label.gifts-choice`.
+- Each `.gifts-gate` (`data-gate="kid"` and `data-gate="adult"`) is its own tag (chamfer + 2px ink rule, no hole, so the heading stays short). Each wax submit is full-width of its own tag.
+- Kid names are a compact 2-column grid at 375, 4 columns from 900px, each tag at least 48px (`--tap`). The selected name uses a 2px wax ring, a well fill, and an ink check — not colour alone. The focus ring is the ink outline, distinct from the selected ring.
 - Two `.gifts-enter` buttons can appear together on the sample sign-in page (kid gate and adult gate). That is a real-markup constraint: each form still has one primary. Demo banner buttons are never wax.
+- Adults still follow kids in the DOM (and in tab order). The compact grid shortens the page; a jump link or putting the adult gate first would need a small `app.js` change if the adult field still sits below the fold on a short phone.
 
 ### Status and empty
 
@@ -112,12 +116,12 @@ The stylesheet is written to the real markup. No `.gifts-tag` wrappers or hole s
 
 ## States designed
 
-Intro (no sheet), sample sign-in, sign-in error (empty family code), adult all, kid mine (Cruz), kid mine empty (Carlos), add form, edit existing item, form error (“Add a name.”), locked adult all, locked kid mine, focus on Add. Saving… is not a stable demo state: demo writes are synchronous, so it was not shot. Outbound Sheet traffic is never requested in these renders; Playwright aborted every non-local URL (`blocked outbound: []`).
+Intro (no sheet), sample sign-in (kid name selected), adult one (Cruz, open and locked), adult one empty (Carlos), admin all, kid mine (Cruz), add/edit form, locked variants. Saving… is not a stable demo state: demo writes are synchronous, so it was not shot. Outbound Sheet traffic is never requested in these renders; Playwright aborted every non-local URL (`blocked outbound: []`).
 
 ## CSS-only fallbacks (no markup ask required)
 
 - Decorative “To:”, string, and hole on the header.
-- Tag chamfers, ink rule, and punched holes on items, the add form, and name/priority choice chips (chips have no hole).
+- Tag chamfers, ink rule, and punched holes on items, the add form, and name/priority choice chips (chips have no hole). Sign-in gates are tags without a hole.
 - Priority bars on `.gifts-item__priority` and on `#gifts-priority .gifts-choice` (bars are painted on the cream `::after` so they are not covered by the silhouette).
 - Compact empty kids on the adult overview.
 - Lock stamp typography and rotation on the existing `#gifts-locknote` node.
