@@ -21,15 +21,15 @@ var gs = fs.readFileSync(path.join(root, "apps-script", "Code.gs"), "utf8");
 var home = fs.readFileSync(path.join(root, "..", "index.html"), "utf8");
 
 var lock = gifts.lockInstant();
-assert(lock === Date.UTC(2026, 11, 15, 8, 0, 0), "lock instant utc");
-assert(gifts.LOCK_AT === "2026-12-15T00:00:00-08:00", "lock string");
+assert(lock === Date.UTC(2026, 11, 12, 8, 0, 0), "lock instant utc");
+assert(gifts.LOCK_AT === "2026-12-12T00:00:00-08:00", "lock string");
 assert(gs.indexOf(gifts.LOCK_AT) >= 0, "script lock string");
-assert(Date.parse("2026-12-14T23:59:59-08:00") < lock, "still open at 23:59:59 PT");
-assert(gifts.isLocked(Date.parse("2026-12-14T23:59:59-08:00")) === false, "not locked before midnight");
+assert(Date.parse("2026-12-11T23:59:59-08:00") < lock, "still open at 23:59:59 PT");
+assert(gifts.isLocked(Date.parse("2026-12-11T23:59:59-08:00")) === false, "not locked before midnight");
 assert(gifts.isLocked(lock - 1) === false, "one ms before");
 assert(gifts.isLocked(lock) === true, "locked at the instant");
-assert(gifts.isLocked(Date.parse("2026-12-15T00:00:00-08:00")) === true, "locked at given stamp");
-assert(gifts.isLocked(Date.parse("2026-12-15T00:00:00Z")) === false, "utc midnight is still Dec 14 evening PT");
+assert(gifts.isLocked(Date.parse("2026-12-12T00:00:00-08:00")) === true, "locked at given stamp");
+assert(gifts.isLocked(Date.parse("2026-12-12T00:00:00Z")) === false, "utc midnight is still Dec 11 evening PT");
 assert(gifts.countdownParts(lock) === null, "no countdown at lock");
 assert(gifts.countdownParts(lock + 1000) === null, "no countdown after");
 
@@ -125,7 +125,7 @@ assert(app.indexOf("innerHTML") < 0 && app.indexOf("insertAdjacentHTML") < 0, "n
 assert(!/\.style\b/.test(app) && !/style\s*=/.test(app), "no styles in js");
 assert(!/style\s*=/.test(html), "no inline styles");
 assert(html.indexOf('role="status"') >= 0 && html.indexOf('aria-live="polite"') >= 0, "status live");
-assert(html.indexOf("Lists locked Dec 14") >= 0, "lock copy");
+assert(html.indexOf("Lists locked Dec 11") >= 0, "lock copy");
 assert(html.indexOf('class="gifts-status"') >= 0, "status class");
 assert(css.indexOf("@font-face") >= 0, "self-hosted fonts");
 

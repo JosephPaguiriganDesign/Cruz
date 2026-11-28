@@ -58,11 +58,11 @@ There is no `.is-editing` class. The edit screen is `data-view="edit"`.
 | `#gifts-signout.gifts-signout` | `button` | Clears the session |
 | `.gifts-back` | `a` | Back to the Cruz home page |
 | `#gifts-countdown.gifts-countdown` | `p` | Countdown. `aria-label` is a full sentence |
-| `.gifts-countdown__label` | `span` | "Closes December 14" |
+| `.gifts-countdown__label` | `span` | "Closes December 11" |
 | `.gifts-countdown__chunk` | `span` | Wraps one number and its unit |
 | `.gifts-countdown__num` | `span` | The number |
 | `.gifts-countdown__unit` | `span` | `day(s)`, `hour(s)`, `minute(s)`, or `second(s)` |
-| `#gifts-locknote.gifts-locknote` | `p` | Exact text: `Lists locked Dec 14` |
+| `#gifts-locknote.gifts-locknote` | `p` | Exact text: `Lists locked Dec 11` |
 | `#gifts-demo.gifts-demo` | `div` | Sample banner |
 | `.gifts-demo__text` | `p` | Sample explanation |
 | `.gifts-preview-lock` | `button` | Toggles the locked preview in the sample only |
@@ -203,7 +203,7 @@ At most 40 gifts per kid.
 | `scriptUrl` | Apps Script web app URL ending in `/exec`. Empty until Joseph pastes it |
 | `kids` | Names in list order. No codes |
 
-`gifts/app.js` holds the lock instant `2026-12-15T00:00:00-08:00` and the same rules the script enforces. The only codes in that file are the sample words (`cruz-view`, `cruz-edit`, `sample-admin`, and the same pattern for each kid). They work only while `scriptUrl` is empty.
+`gifts/app.js` holds the lock instant `2026-12-12T00:00:00-08:00` and the same rules the script enforces. The only codes in that file are the sample words (`cruz-view`, `cruz-edit`, `sample-admin`, and the same pattern for each kid). They work only while `scriptUrl` is empty.
 
 ## Storage in the browser
 
@@ -262,6 +262,6 @@ Reads work before and after the lock.
 
 Success: `{ ok: true, locked: false, items }`.
 
-After the deadline: `{ ok: false, locked: true, error: "Lists locked Dec 14." }` and nothing is written.
+After the deadline: `{ ok: false, locked: true, error: "Lists locked Dec 11." }` and nothing is written.
 
 Reads still work after the lock.
