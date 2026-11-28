@@ -96,13 +96,13 @@ While the countdown is more than a day away it shows days, hours, and minutes. U
 | `.gifts-choice` | `label` wrapping a radio |
 | `#gifts-kid-<lowercase name>` | Each name radio. `name="kid"` `value` is the name |
 | `#gifts-edit-code` | The kid's edit code. Label: "Your code" |
-| `#gifts-adult-form` | Adult form. One field. The jump link's target |
-| `#gifts-adult-code` | Adult code. Label text is exactly `Your code`. Focused when the jump link is used |
-| `.gifts-jump` | `a` directly under the sign-in lede. `href="#gifts-adult-form"`. Text: `Grown-ups: enter your code ↓`. Scrolling to the form also focuses `#gifts-adult-code` |
+| `#gifts-adult-form` | Adult form. One field |
+| `#gifts-adult-code` | Adult code. Label text is exactly `Your code` |
+| `#gifts-adult-form h3` | Plain heading inside the adult code field, directly above the `Your code` label. Text: `Grown-ups: enter your code`. Not a link or button |
 | `.gifts-enter` | Submit for either sign-in form |
 | `.gifts-field` | Label + input pair |
 
-The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`. `.gifts-jump` is styled at the end of `gifts/style.css` with `var(--ink)` and `var(--wax)`.
+The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`. The adult field heading uses Fraunces at `--fs-item`, ink on the tag, with no underline.
 
 ## Adult single list (`data-view="one"`)
 

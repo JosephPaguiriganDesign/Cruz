@@ -665,11 +665,23 @@ body[data-view="one"] .gifts-status {
 }
 
 .gifts-field { display: grid; gap: 6px; margin: 0 0 var(--s4); }
+.gifts-field > h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  font-size: var(--fs-item);
+  color: var(--ink);
+  text-decoration: none;
+}
 .gifts-field > label {
   display: flex;
   align-items: flex-end;
   min-height: 44px;
 }
+.gifts-field > h3 + label { min-height: 0; align-items: flex-start; }
 .gifts-field input,
 .gifts-form input[type="text"],
 .gifts-form input[type="url"],
@@ -1045,5 +1057,3 @@ body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
   .gifts-locknote { transform: none; }
 }
 
-.gifts-jump{display:inline-flex;align-items:center;min-height:44px;color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:2px}
-.gifts-jump:focus-visible{outline:3px solid var(--wax);outline-offset:3px}

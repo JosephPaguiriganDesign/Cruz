@@ -555,22 +555,9 @@
       showMain(page, focus);
       return;
     }
-    page.appendChild(el("a", { class: "gifts-jump", href: "#gifts-adult-form" }, ["Grown-ups: enter your code ↓"]));
     page.appendChild(kidGate());
     page.appendChild(adultGate());
-    var jump = location.hash === "#gifts-adult-form";
-    showMain(page, focus && !jump);
-    if (jump) focusAdultCode();
-  }
-
-  function focusAdultCode() {
-    var form = document.getElementById("gifts-adult-form");
-    var field = document.getElementById("gifts-adult-code");
-    if (form && form.scrollIntoView) {
-      try { form.scrollIntoView({ block: "start" }); }
-      catch (err) { form.scrollIntoView(); }
-    }
-    if (field) field.focus();
+    showMain(page, focus);
   }
 
   function kidGate() {
@@ -611,14 +598,16 @@
     gate.appendChild(el("h2", null, ["Adults"]));
     gate.appendChild(el("p", { class: "gifts-lede" }, ["Enter your code. It opens one list."]));
     var form = el("form", { id: "gifts-adult-form" });
-    form.appendChild(field("gifts-adult-code", "Your code", {
+    var code = field("gifts-adult-code", "Your code", {
       name: "code",
       required: true,
       maxlength: 32,
       autocomplete: "off",
       autocapitalize: "characters",
       spellcheck: false
-    }));
+    });
+    code.insertBefore(el("h3", null, ["Grown-ups: enter your code"]), code.firstChild);
+    form.appendChild(code);
     form.appendChild(el("button", { type: "submit", class: "gifts-enter" }, ["See the list"]));
     gate.appendChild(form);
     return gate;
@@ -1223,14 +1212,6 @@
   }
 
   function onClick(event) {
-    var jumpLink = event.target.closest ? event.target.closest("a.gifts-jump") : null;
-    if (jumpLink) {
-      if (location.hash === "#gifts-adult-form") {
-        event.preventDefault();
-        focusAdultCode();
-      }
-      return;
-    }
     var btn = event.target.closest ? event.target.closest("button") : null;
     if (!btn) return;
     if (btn.classList.contains("gifts-demo-start")) {
