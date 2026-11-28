@@ -82,9 +82,13 @@ assert(!/[0O1ILl]/.test(alphabet), "ambiguous chars " + alphabet);
 assert((gs.match(/CODE_LENGTH = (\d+)/) || [])[1] === "6", "code length");
 assert(gs.indexOf("function setupCodes") >= 0, "setupCodes");
 assert(gs.indexOf("function resetCode") >= 0, "resetCode");
-assert(gs.indexOf("if (!props.getProperty(key))") >= 0, "setup does not overwrite");
-assert(gs.indexOf('props.getProperty("FAMILY_CODE")') >= 0, "family property");
-assert(gs.indexOf('return "CODE_" + name') >= 0, "kid property key");
+assert(gs.indexOf("if (!props.getProperty(editKey))") >= 0, "setup keeps edit codes");
+assert(gs.indexOf("if (!props.getProperty(lookKey))") >= 0, "setup keeps view codes");
+assert(gs.indexOf('if (!props.getProperty("ADMIN"))') >= 0, "setup creates admin");
+assert(gs.indexOf('deleteProperty("FAMILY_CODE")') >= 0, "old shared code is removed");
+assert(gs.indexOf('return "CODE_" + name') >= 0, "edit property key");
+assert(gs.indexOf('return "VIEW_" + name') >= 0, "view property key");
+assert(gs.indexOf("function uniqueCode") >= 0, "codes cannot collide");
 assert(gs.indexOf("var NAME_MAX = " + gifts.LIMITS.name) >= 0, "name max");
 assert(gs.indexOf("var NOTE_MAX = " + gifts.LIMITS.note) >= 0, "note max");
 assert(gs.indexOf("var LINK_MAX = " + gifts.LIMITS.link) >= 0, "link max");
@@ -97,7 +101,13 @@ function sliceFn(name, next) {
   return gs.slice(start, end);
 }
 var getFn = sliceFn("doGet", "doPost");
-var postFn = sliceFn("doPost", "readLists");
+var postFn = sliceFn("doPost", "openByCode");
+var openFn = sliceFn("openByCode", "findCode");
+assert(openFn.indexOf("kids:") >= 0, "admin payload has kids");
+assert(openFn.indexOf('role: "view"') < 0 || openFn.indexOf("hit.role") >= 0, "view uses the matched role");
+assert(openFn.indexOf("itemsFor(items, hit.kid)") >= 0, "one kid items");
+var viewReturn = openFn.slice(openFn.lastIndexOf("return {"));
+assert(viewReturn.indexOf("kids:") < 0, "single-kid payload has no kids array");
 assert(getFn.indexOf("Codes") < 0 && getFn.indexOf("setProperty") < 0, "get does not touch codes");
 assert(postFn.indexOf("Codes") < 0, "post does not read the codes tab");
 assert(postFn.indexOf("isLocked()") >= 0, "post checks the lock");
@@ -117,7 +127,7 @@ assert(!/style\s*=/.test(html), "no inline styles");
 assert(html.indexOf('role="status"') >= 0 && html.indexOf('aria-live="polite"') >= 0, "status live");
 assert(html.indexOf("Lists locked Dec 14") >= 0, "lock copy");
 assert(html.indexOf('class="gifts-status"') >= 0, "status class");
-assert(css.indexOf("@font-face") < 0, "fonts come later");
+assert(css.indexOf("@font-face") >= 0, "self-hosted fonts");
 
 [
   "gifts-kid", "gifts-kid__name", "gifts-kid__count", "gifts-items", "gifts-item",
@@ -129,9 +139,36 @@ assert(css.indexOf("@font-face") < 0, "fonts come later");
   assert(app.indexOf(hook) >= 0 || html.indexOf(hook) >= 0, "missing hook " + hook);
 });
 
-["signin", "all", "mine", "edit"].forEach(function (view) {
+["signin", "one", "all", "mine", "edit"].forEach(function (view) {
   assert(app.indexOf('"' + view + '"') >= 0, "view " + view);
 });
+assert(app.indexOf("gifts-one__title") >= 0 && app.indexOf("gifts-one__name") >= 0, "one heading");
+assert(app.indexOf('field("gifts-adult-code", "Your code"') >= 0, "adult label");
+assert(app.indexOf("gifts-lede") >= 0, "read-only note");
+
+var names = config.kids.slice();
+var mixed = [
+  { id: "1", kid: "Cruz", name: "Soccer ball", link: "", note: "Size 4", priority: "high" },
+  { id: "2", kid: "Kaleo", name: "Headphones", link: "", note: "Over-ear", priority: "high" },
+  { id: "3", kid: "Sammy", name: "Chapter book", link: "", note: "", priority: "low" }
+];
+var book = { locked: false, kids: names, items: mixed, codes: gifts.sampleCodes(names) };
+var view = gifts.openWithCode("cruz-view", book);
+assert(view.ok === true && view.role === "view" && view.kid === "Cruz", "view role");
+assert(!view.kids, "view has no kids array");
+assert(view.items.length === 1 && view.items[0].name === "Soccer ball", "view items");
+var viewDump = JSON.stringify(view);
+names.forEach(function (name) {
+  if (name !== "Cruz") assert(viewDump.indexOf(name) < 0, "view leaked " + name);
+});
+assert(viewDump.indexOf("Headphones") < 0 && viewDump.indexOf("Chapter book") < 0, "view leaked gifts");
+var edit = gifts.openWithCode("cruz-edit", book);
+assert(edit.role === "edit" && edit.kid === "Cruz" && !edit.kids, "edit payload");
+assert(JSON.stringify(edit).indexOf("Kaleo") < 0, "edit leaked Kaleo");
+var admin = gifts.openWithCode("sample-admin", book);
+assert(admin.role === "admin" && admin.kids && admin.kids.length === names.length, "admin lists");
+var bad = gifts.openWithCode("nope", book);
+assert(bad.ok === false && !bad.kid && !bad.items && !bad.kids, "invalid code has no data");
 
 assert(home.indexOf('href="gifts/"') >= 0, "home link");
 

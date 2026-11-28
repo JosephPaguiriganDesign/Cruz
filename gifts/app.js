@@ -99,6 +99,57 @@
     return { ok: true, errors: [], value: { name: name, link: link, note: note, priority: priority } };
   }
 
+  function listedItems(list, kid) {
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      if (!list[i] || list[i].kid !== kid) continue;
+      out.push({
+        id: list[i].id || "",
+        name: list[i].name || "",
+        link: list[i].link || "",
+        note: list[i].note || "",
+        priority: list[i].priority || ""
+      });
+    }
+    return out;
+  }
+
+  function sampleCodes(names) {
+    var codes = { "SAMPLE-ADMIN": { role: "admin" } };
+    for (var i = 0; i < names.length; i++) {
+      var slug = String(names[i]).toLowerCase();
+      codes[(slug + "-view").toUpperCase()] = { role: "view", kid: names[i] };
+      codes[(slug + "-edit").toUpperCase()] = { role: "edit", kid: names[i] };
+    }
+    return codes;
+  }
+
+  function openWithCode(code, book) {
+    var key = trim(code).toUpperCase();
+    var hit = book && book.codes ? book.codes[key] : null;
+    if (!hit) return { ok: false, error: "That code is not right." };
+    var locked = !!(book && book.locked);
+    if (hit.role === "admin") {
+      var kids = [];
+      var names = book.kids || [];
+      for (var i = 0; i < names.length; i++) {
+        kids.push({ name: names[i], items: listedItems(book.items || [], names[i]) });
+      }
+      return { ok: true, role: "admin", locked: locked, lockAt: LOCK_AT, kids: kids };
+    }
+    if ((hit.role !== "view" && hit.role !== "edit") || !hit.kid) {
+      return { ok: false, error: "That code is not right." };
+    }
+    return {
+      ok: true,
+      role: hit.role,
+      locked: locked,
+      lockAt: LOCK_AT,
+      kid: hit.kid,
+      items: listedItems(book.items || [], hit.kid)
+    };
+  }
+
   var api = {
     LOCK_AT: LOCK_AT,
     LIMITS: LIMITS,
@@ -111,7 +162,9 @@
     priorityLabel: priorityLabel,
     itemCountText: itemCountText,
     isHttpUrl: isHttpUrl,
-    validateItem: validateItem
+    validateItem: validateItem,
+    sampleCodes: sampleCodes,
+    openWithCode: openWithCode
   };
 
   root.GiftsList = api;
@@ -155,7 +208,7 @@
   }
 
   function blankSession() {
-    return { demo: false, role: "", familyCode: "", kid: "", editCode: "", previewLocked: false };
+    return { demo: false, role: "", kid: "", code: "", previewLocked: false };
   }
 
   function loadSession() {
@@ -166,10 +219,9 @@
       var data = JSON.parse(raw);
       if (!data || typeof data !== "object") return next;
       next.demo = data.demo === true;
-      next.role = data.role === "adult" || data.role === "kid" ? data.role : "";
-      next.familyCode = typeof data.familyCode === "string" ? data.familyCode : "";
+      next.role = data.role === "one" || data.role === "admin" || data.role === "kid" ? data.role : "";
       next.kid = typeof data.kid === "string" ? data.kid : "";
-      next.editCode = typeof data.editCode === "string" ? data.editCode : "";
+      next.code = typeof data.code === "string" ? data.code : "";
       next.previewLocked = data.previewLocked === true;
     } catch (err) { /* private mode */ }
     return next;
@@ -269,6 +321,7 @@
     var parts = path.split("/").filter(Boolean);
     var name = parts[0] || "";
     if (name === "all") return { name: "all" };
+    if (name === "one") return { name: "one" };
     if (name === "mine") return { name: "mine" };
     if (name === "edit") return { name: "edit", id: parts[1] ? decodeURIComponent(parts[1]) : "" };
     return { name: "signin" };
@@ -354,7 +407,7 @@
     demoStamp = stamp;
     clear(banner);
     banner.appendChild(el("p", { class: "gifts-demo__text" }, [
-      "This is a sample on this device. Type any code to look around. Nothing is saved for the family."
+      "Sample on this device. cruz-view opens Cruz's list. cruz-edit changes it. sample-admin sees every list."
     ]));
     banner.appendChild(el("button", {
       type: "button",
@@ -403,7 +456,7 @@
   function setView(name) {
     var prev = document.body.getAttribute("data-view");
     document.body.setAttribute("data-view", name);
-    var titles = { signin: "Gift lists", all: "All the lists", mine: "My list", edit: "Edit a gift" };
+    var titles = { signin: "Gift lists", all: "Every list", one: "Secret santa", mine: "My list", edit: "Edit a gift" };
     document.title = (titles[name] || "Gift lists") + " — Cruz";
     return prev !== name;
   }
@@ -491,8 +544,8 @@
     var focus = setView("signin");
     var page = el("div", { class: "gifts-page" });
     page.appendChild(el("h1", { class: "gifts-title" }, ["Gift lists"]));
-    page.appendChild(el("p", { class: "gifts-lead" }, [
-      "Adults can see every list. Kids can change their own list until December 14."
+    page.appendChild(el("p", { class: "gifts-lede" }, [
+      "Each adult sees one kid's list. Kids can change their own list until December 14."
     ]));
     if (!scriptUrl() && !isDemo()) {
       page.appendChild(el("p", { class: "gifts-setup" }, [
@@ -543,9 +596,9 @@
   function adultGate() {
     var gate = el("section", { class: "gifts-gate", "data-gate": "adult" });
     gate.appendChild(el("h2", null, ["Adults"]));
-    gate.appendChild(el("p", { class: "gifts-lead" }, ["Enter the family code. You can look, not change."]));
+    gate.appendChild(el("p", { class: "gifts-lede" }, ["Enter your code. It opens one list."]));
     var form = el("form", { id: "gifts-adult-form" });
-    form.appendChild(field("gifts-family-code", "Family code", {
+    form.appendChild(field("gifts-adult-code", "Your code", {
       name: "code",
       required: true,
       maxlength: 32,
@@ -553,22 +606,38 @@
       autocapitalize: "characters",
       spellcheck: false
     }));
-    form.appendChild(el("button", { type: "submit", class: "gifts-enter" }, ["See the lists"]));
+    form.appendChild(el("button", { type: "submit", class: "gifts-enter" }, ["See the list"]));
     gate.appendChild(form);
     return gate;
   }
 
   function allPage(serverKids) {
     var page = el("div", { class: "gifts-page gifts-lists" });
-    page.appendChild(el("h1", { class: "gifts-title" }, ["Everyone's lists"]));
-    page.appendChild(el("p", { class: "gifts-lead" }, [
+    page.appendChild(el("h1", { class: "gifts-title" }, ["Every list"]));
+    page.appendChild(el("p", { class: "gifts-lede" }, [
       viewLocked()
         ? "You can still look. Nothing can be changed."
-        : "You can look. Only each kid can change their own list."
+        : "You can look at every list. You cannot change them."
     ]));
     var sections = groupLists(serverKids);
     if (!sections.length) page.appendChild(el("p", { class: "gifts-empty" }, ["No lists yet."]));
     sections.forEach(function (kid) { page.appendChild(kidSection(kid, false)); });
+    return page;
+  }
+
+  function onePage(name, items) {
+    var page = el("div", { class: "gifts-page" });
+    var title = el("h1", { class: "gifts-one__title" });
+    title.appendChild(document.createTextNode("You're "));
+    title.appendChild(el("span", { class: "gifts-one__name", text: name }));
+    title.appendChild(document.createTextNode("'s secret santa"));
+    page.appendChild(title);
+    page.appendChild(el("p", { class: "gifts-lede" }, [
+      viewLocked()
+        ? "You can still look. Nothing can be changed."
+        : "You can look. Only " + name + " can change this list."
+    ]));
+    page.appendChild(kidSection({ name: name, items: items }, false));
     return page;
   }
 
@@ -669,19 +738,17 @@
     });
   }
 
-  function demoAll() {
-    var items = demoItems();
+  function demoBook() {
     return {
-      ok: true,
       locked: viewLocked(),
-      kids: kidNames().map(function (name) {
-        return { name: name, items: itemsFor(items, name) };
-      })
+      kids: kidNames(),
+      items: demoItems(),
+      codes: sampleCodes(kidNames())
     };
   }
 
-  function demoMine() {
-    return { ok: true, locked: viewLocked(), kid: session.kid, items: itemsFor(demoItems(), session.kid) };
+  function demoOpen() {
+    return openWithCode(session.code, demoBook());
   }
 
   function drawAll() {
@@ -690,12 +757,12 @@
     var main = document.getElementById("gifts-main");
     if (main) main.setAttribute("aria-busy", "true");
     showMain(loadingPage("Loading lists…"), false);
-    var pending = isDemo() ? Promise.resolve(demoAll()) : apiGet({ action: "lists", code: session.familyCode });
+    var pending = isDemo() ? Promise.resolve(demoOpen()) : apiGet({ code: session.code });
     pending.then(function (data) {
       if (token !== renderToken) return;
-      if (!data || !data.ok) {
+      if (!data || !data.ok || data.role !== "admin") {
         session.role = "";
-        session.familyCode = "";
+        session.code = "";
         saveSession();
         setStatus(errorText(data), "error");
         go("#/");
@@ -717,15 +784,13 @@
     var main = document.getElementById("gifts-main");
     if (main) main.setAttribute("aria-busy", "true");
     showMain(loadingPage("Loading your list…"), false);
-    var pending = isDemo()
-      ? Promise.resolve(demoMine())
-      : apiGet({ action: "mine", kid: session.kid, code: session.editCode });
+    var pending = isDemo() ? Promise.resolve(demoOpen()) : apiGet({ code: session.code });
     pending.then(function (data) {
       if (token !== renderToken) return;
-      if (!data || !data.ok) {
+      if (!data || !data.ok || data.role !== "edit" || data.kids) {
         session.role = "";
         session.kid = "";
-        session.editCode = "";
+        session.code = "";
         saveSession();
         setStatus(errorText(data), "error");
         go("#/");
@@ -738,12 +803,48 @@
         var item = presentItem(raw);
         if (item) items.push(item);
       });
-      showMain(minePage(session.kid, items), focus);
+      showMain(minePage(data.kid || session.kid, items), focus);
       applyChrome();
     }, function () {
       if (token !== renderToken) return;
       setStatus("The list could not be reached. Check the connection and try again.", "error");
       showMain(loadingPage("Your list could not be loaded."), focus);
+    });
+  }
+
+  function drawOne() {
+    var token = ++renderToken;
+    var focus = setView("one");
+    var main = document.getElementById("gifts-main");
+    if (main) main.setAttribute("aria-busy", "true");
+    showMain(loadingPage("Loading the list…"), false);
+    var pending = isDemo() ? Promise.resolve(demoOpen()) : apiGet({ code: session.code });
+    pending.then(function (data) {
+      if (token !== renderToken) return;
+      if (!data || !data.ok || data.role !== "view" || !data.kid || data.kids) {
+        session.role = "";
+        session.kid = "";
+        session.code = "";
+        saveSession();
+        setStatus(errorText(data), "error");
+        go("#/");
+        return;
+      }
+      rememberLock(data);
+      applyChrome();
+      var items = [];
+      (data.items || []).forEach(function (raw) {
+        var item = presentItem(raw);
+        if (item) items.push(item);
+      });
+      session.kid = data.kid;
+      saveSession();
+      showMain(onePage(data.kid, items), focus);
+      applyChrome();
+    }, function () {
+      if (token !== renderToken) return;
+      setStatus("The list could not be reached. Check the connection and try again.", "error");
+      showMain(loadingPage("The list could not be loaded."), focus);
     });
   }
 
@@ -754,12 +855,10 @@
       return;
     }
     var token = ++renderToken;
-    var pending = isDemo()
-      ? Promise.resolve(demoMine())
-      : apiGet({ action: "mine", kid: session.kid, code: session.editCode });
+    var pending = isDemo() ? Promise.resolve(demoOpen()) : apiGet({ code: session.code });
     pending.then(function (data) {
       if (token !== renderToken) return;
-      if (!data || !data.ok) {
+      if (!data || !data.ok || data.role !== "edit" || data.kids) {
         setStatus(errorText(data), "error");
         go("#/mine");
         return;
@@ -803,12 +902,20 @@
         drawSignin();
         return;
       }
-      if (role === "adult") {
+      if (role === "admin") {
         if (route.name !== "all") {
           go("#/all");
           return;
         }
         drawAll();
+        return;
+      }
+      if (role === "one") {
+        if (route.name !== "one") {
+          go("#/one");
+          return;
+        }
+        drawOne();
         return;
       }
       if (route.name === "edit") {
@@ -855,19 +962,68 @@
     }
   }
 
-  function submitAdult(form) {
-    var code = trim(form.querySelector("#gifts-family-code").value);
-    if (!code) {
-      setStatus("Enter the family code.", "error");
+  function acceptCode(data, expectedKid) {
+    if (!data || !data.ok) {
+      setStatus(errorText(data), "error");
       return;
     }
-    session.role = "adult";
-    session.familyCode = isDemo() ? "" : code;
-    session.kid = "";
-    session.editCode = "";
+    if (data.role === "admin") {
+      session.role = "admin";
+      session.kid = "";
+      saveSession();
+      setStatus("");
+      go("#/all");
+      return;
+    }
+    if (data.role === "view") {
+      if (data.kids || !data.kid) {
+        setStatus("That code is not right.", "error");
+        return;
+      }
+      session.role = "one";
+      session.kid = data.kid;
+      saveSession();
+      setStatus("");
+      go("#/one");
+      return;
+    }
+    if (data.role === "edit" && data.kid && !data.kids) {
+      if (expectedKid && data.kid !== expectedKid) {
+        setStatus("That name and code do not match.", "error");
+        return;
+      }
+      session.role = "kid";
+      session.kid = data.kid;
+      saveSession();
+      setStatus("");
+      go("#/mine");
+      return;
+    }
+    setStatus("That code is not right.", "error");
+  }
+
+  function submitAdult(form) {
+    var code = trim(form.querySelector("#gifts-adult-code").value);
+    if (!code) {
+      setStatus("Enter your code.", "error");
+      return;
+    }
+    session.code = code;
     saveSession();
-    setStatus("");
-    go("#/all");
+    if (isDemo()) {
+      acceptCode(openWithCode(code, demoBook()));
+      return;
+    }
+    setBusy(form, true);
+    setStatus("Checking the code…", "saving");
+    apiGet({ code: code }).then(function (data) {
+      setBusy(form, false);
+      setStatus("");
+      acceptCode(data);
+    }, function () {
+      setBusy(form, false);
+      setStatus("The list could not be reached. Check the connection and try again.", "error");
+    });
   }
 
   function submitKid(form) {
@@ -881,13 +1037,31 @@
       setStatus("Enter your code.", "error");
       return;
     }
-    session.role = "kid";
-    session.kid = selected.value;
-    session.editCode = isDemo() ? "" : code;
-    session.familyCode = "";
+    session.code = code;
     saveSession();
-    setStatus("");
-    go("#/mine");
+    if (isDemo()) {
+      var sample = openWithCode(code, demoBook());
+      if (!sample.ok || sample.role !== "edit") {
+        setStatus("That name and code do not match.", "error");
+        return;
+      }
+      acceptCode(sample, selected.value);
+      return;
+    }
+    setBusy(form, true);
+    setStatus("Checking the code…", "saving");
+    apiGet({ code: code }).then(function (data) {
+      setBusy(form, false);
+      setStatus("");
+      if (!data || !data.ok || data.role !== "edit") {
+        setStatus("That name and code do not match.", "error");
+        return;
+      }
+      acceptCode(data, selected.value);
+    }, function () {
+      setBusy(form, false);
+      setStatus("The list could not be reached. Check the connection and try again.", "error");
+    });
   }
 
   function newDemoId() {
@@ -895,6 +1069,15 @@
   }
 
   function writeDemo(action, item) {
+    var gate = openWithCode(session.code, {
+      locked: false,
+      kids: kidNames(),
+      items: [],
+      codes: sampleCodes(kidNames())
+    });
+    if (!gate.ok || gate.role !== "edit" || gate.kid !== session.kid) {
+      return { ok: false, error: "That code cannot change this list." };
+    }
     var items = demoItems();
     if (viewLocked()) return { ok: false, locked: true, error: "Lists locked Dec 14." };
     if (action === "add") {
@@ -959,7 +1142,7 @@
     var pending = isDemo() ? Promise.resolve(writeDemo(action, payload)) : apiPost({
       action: action,
       kid: session.kid,
-      code: session.editCode,
+      code: session.code,
       item: payload
     });
     pending.then(function (data) {
@@ -989,7 +1172,7 @@
     setStatus("Saving…", "saving");
     var pending = isDemo()
       ? Promise.resolve(writeDemo("remove", { id: id }))
-      : apiPost({ action: "remove", kid: session.kid, code: session.editCode, item: { id: id } });
+      : apiPost({ action: "remove", kid: session.kid, code: session.code, item: { id: id } });
     pending.then(function (data) {
       if (data && data.locked) {
         serverLocked = true;

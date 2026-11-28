@@ -43,18 +43,25 @@ function onOpen() {
 /** Create any missing codes. Never replaces a code that is already stored. */
 function setupCodes() {
   var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("FAMILY_CODE")) props.deleteProperty("FAMILY_CODE");
+  var used = usedCodes(props);
   var created = [];
   var i;
   for (i = 0; i < KIDS.length; i++) {
-    var key = codeKey(KIDS[i]);
-    if (!props.getProperty(key)) {
-      props.setProperty(key, randomCode());
-      created.push(KIDS[i]);
+    var editKey = codeKey(KIDS[i]);
+    var lookKey = viewKey(KIDS[i]);
+    if (!props.getProperty(editKey)) {
+      props.setProperty(editKey, uniqueCode(used));
+      created.push(KIDS[i] + " edit");
+    }
+    if (!props.getProperty(lookKey)) {
+      props.setProperty(lookKey, uniqueCode(used));
+      created.push(KIDS[i] + " view");
     }
   }
-  if (!props.getProperty("FAMILY_CODE")) {
-    props.setProperty("FAMILY_CODE", randomCode());
-    created.push("FAMILY");
+  if (!props.getProperty("ADMIN")) {
+    props.setProperty("ADMIN", uniqueCode(used));
+    created.push("ADMIN");
   }
   writeCodesSheet();
   ensureItemsSheet();
@@ -64,37 +71,66 @@ function setupCodes() {
   return created;
 }
 
-/** Replace one code. Pass a kid's name, or FAMILY. Returns the name, not the code. */
-function resetCode(name) {
+/** Replace one code. resetCode("ADMIN") or resetCode("Cruz", "edit"|"view"). Returns a label, not the code. */
+function resetCode(name, kind) {
   var who = canonicalKid(name);
-  if (!who) throw new Error("Unknown name. Use a kid's name, or FAMILY.");
+  var which = trim(kind).toLowerCase();
+  if (!who) throw new Error("Unknown name. Use a kid's name and edit or view, or ADMIN.");
   var props = PropertiesService.getScriptProperties();
-  if (who === "FAMILY") props.setProperty("FAMILY_CODE", randomCode());
-  else props.setProperty(codeKey(who), randomCode());
+  var key = "";
+  var label = who;
+  if (who === "ADMIN") {
+    key = "ADMIN";
+    label = "ADMIN";
+  } else if (which === "edit") {
+    key = codeKey(who);
+    label = who + " edit";
+  } else if (which === "view") {
+    key = viewKey(who);
+    label = who + " view";
+  } else {
+    throw new Error("Say edit or view, or ADMIN.");
+  }
+  var used = usedCodes(props);
+  var old = cleanCode(props.getProperty(key) || "");
+  if (old) delete used[old];
+  props.setProperty(key, uniqueCode(used));
   writeCodesSheet();
   toast("The new code is on the Codes tab. The old one no longer works.");
-  return who;
+  return label;
 }
 
 function resetCodePrompt() {
   var ui = SpreadsheetApp.getUi();
-  var response = ui.prompt("Reset a code", "Type a kid's name, or FAMILY, then press OK.", ui.ButtonSet.OK_CANCEL);
+  var response = ui.prompt("Reset a code", "Type a kid's name and edit or view, such as Cruz edit. Or type ADMIN.", ui.ButtonSet.OK_CANCEL);
   if (response.getSelectedButton() !== ui.Button.OK) return;
   try {
-    var who = resetCode(response.getResponseText());
-    ui.alert("A new code for " + who + " is on the Codes tab. The old code no longer works.");
+    var parsed = parseReset(response.getResponseText());
+    var label = resetCode(parsed.name, parsed.kind);
+    ui.alert("A new code for " + label + " is on the Codes tab. The old code no longer works.");
   } catch (err) {
-    ui.alert("That name is not in the list. Use a kid's name or FAMILY.");
+    ui.alert("Type a kid's name and edit or view, such as Cruz view. Or type ADMIN.");
   }
+}
+
+function parseReset(text) {
+  var cleaned = trim(text).replace(/\s+/g, " ");
+  if (cleaned.toUpperCase() === "ADMIN") return { name: "ADMIN", kind: "" };
+  var parts = cleaned.split(" ");
+  if (parts.length !== 2) throw new Error("bad reset");
+  var a = parts[0].toLowerCase();
+  var b = parts[1].toLowerCase();
+  if (a === "edit" || a === "view") return { name: parts[1], kind: a };
+  if (b === "edit" || b === "view") return { name: parts[0], kind: b };
+  throw new Error("bad reset");
 }
 
 function doGet(e) {
   try {
     var params = (e && e.parameter) || {};
-    var action = trim(params.action || "");
-    if (action === "lists") return json(readLists(params.code));
-    if (action === "mine") return json(readMine(params.kid, params.code));
-    return json({ ok: false, error: "This is the gift list service." });
+    var code = params.code || "";
+    if (!trim(code)) return json({ ok: false, error: "Enter your code." });
+    return json(openByCode(code));
   } catch (err) {
     return json({ ok: false, error: "The list could not be loaded." });
   }
@@ -109,7 +145,7 @@ function doPost(e) {
       return json({ ok: false, error: "That did not work. Try again." });
     }
     var kid = canonicalKid(body && body.kid);
-    if (!kid || kid === "FAMILY" || !kidOk(kid, body && body.code)) {
+    if (!kid || kid === "ADMIN" || !kidOk(kid, body && body.code)) {
       return json({ ok: false, error: "That name and code do not match." });
     }
     if (isLocked()) return json({ ok: false, locked: true, error: "Lists locked Dec 14." });
@@ -122,23 +158,45 @@ function doPost(e) {
   }
 }
 
-function readLists(code) {
-  if (!familyOk(code)) return { ok: false, error: "That family code is not right." };
+function openByCode(code) {
+  var hit = findCode(code);
+  if (!hit) return { ok: false, error: "That code is not right." };
   var items = readItems();
-  var kids = [];
-  var i;
-  for (i = 0; i < KIDS.length; i++) {
-    kids.push({ name: KIDS[i], items: itemsFor(items, KIDS[i]) });
+  var locked = isLocked();
+  if (hit.role === "admin") {
+    var kids = [];
+    var i;
+    for (i = 0; i < KIDS.length; i++) {
+      kids.push({ name: KIDS[i], items: itemsFor(items, KIDS[i]) });
+    }
+    return { ok: true, role: "admin", locked: locked, lockAt: LOCK_AT, kids: kids };
   }
-  return { ok: true, locked: isLocked(), lockAt: LOCK_AT, kids: kids };
+  return {
+    ok: true,
+    role: hit.role,
+    locked: locked,
+    lockAt: LOCK_AT,
+    kid: hit.kid,
+    items: itemsFor(items, hit.kid)
+  };
 }
 
-function readMine(name, code) {
-  var kid = canonicalKid(name);
-  if (!kid || kid === "FAMILY" || !kidOk(kid, code)) {
-    return { ok: false, error: "That name and code do not match." };
+function findCode(given) {
+  var code = cleanCode(given);
+  if (!code) return null;
+  var props = PropertiesService.getScriptProperties();
+  var hits = [];
+  var admin = cleanCode(props.getProperty("ADMIN") || "");
+  if (admin && sameCode(admin, code)) hits.push({ role: "admin" });
+  var i;
+  for (i = 0; i < KIDS.length; i++) {
+    var view = cleanCode(props.getProperty(viewKey(KIDS[i])) || "");
+    var edit = cleanCode(props.getProperty(codeKey(KIDS[i])) || "");
+    if (view && sameCode(view, code)) hits.push({ role: "view", kid: KIDS[i] });
+    if (edit && sameCode(edit, code)) hits.push({ role: "edit", kid: KIDS[i] });
   }
-  return { ok: true, locked: isLocked(), lockAt: LOCK_AT, kid: kid, items: itemsFor(readItems(), kid) };
+  if (hits.length !== 1) return null;
+  return hits[0];
 }
 
 function writeItem(kid, body) {
@@ -192,13 +250,6 @@ function withLock(fn) {
   } finally {
     lock.releaseLock();
   }
-}
-
-function familyOk(given) {
-  var expected = cleanCode(PropertiesService.getScriptProperties().getProperty("FAMILY_CODE") || "");
-  var code = cleanCode(given);
-  if (!expected || !code) return false;
-  return sameCode(expected, code);
 }
 
 function kidOk(kid, given) {
@@ -284,26 +335,64 @@ function writeCodesSheet() {
   var props = PropertiesService.getScriptProperties();
   var sh = ss.getSheetByName("Codes");
   if (!sh) sh = ss.insertSheet("Codes");
-  var rows = [["FAMILY", props.getProperty("FAMILY_CODE") || ""]];
+  var rows = [["ADMIN", "", props.getProperty("ADMIN") || ""]];
   var i;
-  for (i = 0; i < KIDS.length; i++) rows.push([KIDS[i], props.getProperty(codeKey(KIDS[i])) || ""]);
+  for (i = 0; i < KIDS.length; i++) {
+    rows.push([
+      KIDS[i],
+      props.getProperty(codeKey(KIDS[i])) || "",
+      props.getProperty(viewKey(KIDS[i])) || ""
+    ]);
+  }
   sh.clear();
-  sh.getRange(1, 1, 1, 2).setValues([["name", "code"]]);
-  sh.getRange(2, 1, rows.length, 2).setValues(rows);
+  sh.getRange(1, 1, 1, 3).setValues([["kid", "edit code", "view code"]]);
+  sh.getRange(2, 1, rows.length, 3).setValues(rows);
   sh.getRange(1, 4).setValue("Private copy for Joseph. Do not share this spreadsheet. The website reads Script Properties, not this tab.");
   sh.setFrozenRows(1);
-  sh.getRange(1, 1, rows.length + 1, 2).setNumberFormat("@");
+  sh.getRange(1, 1, rows.length + 1, 3).setNumberFormat("@");
   sh.setColumnWidth(1, 160);
   sh.setColumnWidth(2, 140);
+  sh.setColumnWidth(3, 140);
 }
 
 function codeKey(name) {
   return "CODE_" + name;
 }
 
+function viewKey(name) {
+  return "VIEW_" + name;
+}
+
+function usedCodes(props) {
+  var used = {};
+  function keep(value) {
+    var code = cleanCode(value || "");
+    if (code) used[code] = true;
+  }
+  keep(props.getProperty("ADMIN"));
+  var i;
+  for (i = 0; i < KIDS.length; i++) {
+    keep(props.getProperty(codeKey(KIDS[i])));
+    keep(props.getProperty(viewKey(KIDS[i])));
+  }
+  return used;
+}
+
+function uniqueCode(used) {
+  var code = "";
+  var guard = 0;
+  do {
+    code = randomCode();
+    guard++;
+  } while (used[code] && guard < 30);
+  if (used[code]) throw new Error("Could not make a unique code.");
+  used[code] = true;
+  return code;
+}
+
 function canonicalKid(name) {
   var want = trim(name);
-  if (want.toUpperCase() === "FAMILY") return "FAMILY";
+  if (want.toUpperCase() === "ADMIN") return "ADMIN";
   var i;
   for (i = 0; i < KIDS.length; i++) {
     if (KIDS[i].toLowerCase() === want.toLowerCase()) return KIDS[i];

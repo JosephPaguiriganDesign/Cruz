@@ -124,9 +124,9 @@ h1, h2, .gifts-brand, .gifts-kid__name, .gifts-title,
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
-.gifts-title { font-size: var(--fs-h1); text-wrap: balance; margin: 0 0 var(--s3); }
-.gifts-lead, .gifts-setup, .gifts-loading { margin: 0 0 var(--s5); max-width: var(--measure); }
-.gifts-setup, .gifts-lead, .gifts-loading, .gifts-kid__count { color: var(--ink-2); }
+.gifts-title, .gifts-one__title { font-size: var(--fs-h1); text-wrap: balance; margin: 0 0 var(--s3); }
+.gifts-lead, .gifts-lede, .gifts-setup, .gifts-loading { margin: 0 0 var(--s5); max-width: var(--measure); }
+.gifts-setup, .gifts-lead, .gifts-lede, .gifts-loading, .gifts-kid__count { color: var(--ink-2); }
 
 /* ---------- Skip + focus ---------------------------------------------- */
 .gifts-skip {
@@ -262,7 +262,11 @@ body[data-view="mine"] .gifts-status,
 body[data-view="edit"] .gifts-top__inner,
 body[data-view="edit"] .gifts-main,
 body[data-view="edit"] .gifts-demo,
-body[data-view="edit"] .gifts-status {
+body[data-view="edit"] .gifts-status,
+body[data-view="one"] .gifts-top__inner,
+body[data-view="one"] .gifts-main,
+body[data-view="one"] .gifts-demo,
+body[data-view="one"] .gifts-status {
   width: min(100% - 32px, var(--measure));
 }
 
@@ -594,7 +598,7 @@ body[data-view="edit"] .gifts-status {
   letter-spacing: -0.03em;
   margin: 0 0 6px;
 }
-.gifts-gate .gifts-lead { margin-bottom: var(--s4); }
+.gifts-gate .gifts-lead, .gifts-gate .gifts-lede { margin-bottom: var(--s4); }
 
 .gifts-kids {
   display: grid;
@@ -701,11 +705,13 @@ body[data-view="edit"] .gifts-status {
 
 /* Kids with gifts: a name rule, then tags */
 body[data-view="all"] .gifts-kid:not(:has(.gifts-empty)),
-body[data-view="mine"] .gifts-kid {
+body[data-view="mine"] .gifts-kid,
+body[data-view="one"] .gifts-kid {
   padding-bottom: var(--s4);
 }
 body[data-view="all"] .gifts-kid:not(:has(.gifts-empty)) .gifts-kid__name,
-body[data-view="mine"] .gifts-kid__name {
+body[data-view="mine"] .gifts-kid__name,
+body[data-view="one"] .gifts-kid__name {
   padding-bottom: var(--s2);
   border-bottom: var(--b) solid var(--ink);
 }
@@ -732,7 +738,8 @@ body[data-view="all"] .gifts-kid:has(.gifts-empty) .gifts-empty { display: none;
   background: var(--tag);
   color: var(--ink-2);
 }
-body[data-view="mine"] .gifts-empty { margin-top: var(--s2); }
+body[data-view="mine"] .gifts-empty,
+body[data-view="one"] .gifts-empty { margin-top: var(--s2); }
 
 .gifts-items { display: grid; gap: var(--s2); }
 
@@ -918,7 +925,11 @@ body[data-view="mine"] .gifts-empty { margin-top: var(--s2); }
   body[data-view="edit"] .gifts-top__inner,
   body[data-view="edit"] .gifts-main,
   body[data-view="edit"] .gifts-demo,
-  body[data-view="edit"] .gifts-status {
+  body[data-view="edit"] .gifts-status,
+  body[data-view="one"] .gifts-top__inner,
+  body[data-view="one"] .gifts-main,
+  body[data-view="one"] .gifts-demo,
+  body[data-view="one"] .gifts-status {
     width: min(100% - 64px, var(--measure));
   }
 
@@ -929,7 +940,8 @@ body[data-view="mine"] .gifts-empty { margin-top: var(--s2); }
     align-items: start;
   }
   .gifts-lists > .gifts-title,
-  .gifts-lists > .gifts-lead { grid-column: 1 / -1; order: 0; }
+  .gifts-lists > .gifts-lead,
+  .gifts-lists > .gifts-lede { grid-column: 1 / -1; order: 0; }
   /* Filled kids first, then empty kids as one compact run. Visual only at
      this breakpoint: DOM/SR order stays the family order from config.
      Empty sections have no focusable controls, so tab order still matches

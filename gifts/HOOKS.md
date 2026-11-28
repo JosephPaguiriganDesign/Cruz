@@ -2,9 +2,7 @@
 
 Carson can restyle `gifts/style.css` without changing `gifts/app.js`. The page is semantic HTML. Script only toggles classes, the `hidden` attribute, text, and form state. There are no inline styles and no icon fonts.
 
-`gifts/style.css` is a neutral stand-in. Replace that file (and add fonts there) when the design spec arrives. Custom properties are at the top of the stylesheet.
-
-Deploy steps for Joseph are in `gifts/README.md`.
+`gifts/style.css` is Carson's "The Tag" design. New layout for the single-list view reuses those rules and adds only the hooks below. Deploy steps for Joseph are in `gifts/README.md`.
 
 ## Views
 
@@ -12,12 +10,13 @@ Deploy steps for Joseph are in `gifts/README.md`.
 
 | Value | Who | What |
 | --- | --- | --- |
-| `signin` | nobody yet | Sample prompt, or the kid form and the adult form |
-| `all` | adult | Every kid's list, read only |
+| `signin` | nobody yet | Sample prompt, or the kid form and the adult code field |
+| `one` | one adult | That kid's list only, read only |
+| `all` | admin | Every kid's list, read only |
 | `mine` | one kid | That kid's list, with add / edit / remove until the lock |
 | `edit` | one kid | The add or change form |
 
-The lock is not a view. `body` gets class `is-locked`. `data-view` stays `signin`, `all`, `mine`, or `edit`.
+The lock is not a view. `body` gets class `is-locked`. `data-view` stays `signin`, `one`, `all`, `mine`, or `edit`.
 
 Other attributes on `body`:
 
@@ -71,8 +70,11 @@ There is no `.is-editing` class. The edit screen is `data-view="edit"`.
 | `#gifts-status.gifts-status` | `p` | The only status node. `role="status"` `aria-live="polite"` `aria-atomic="true"` |
 | `#gifts-main.gifts-main` | `main` | Swapped content. `tabindex="-1"`. `aria-busy="true"` while a list is loading |
 | `.gifts-page` | `div` | Wrapper inside main |
-| `.gifts-title` | `h1` | Page title |
-| `.gifts-lead` | `p` | Short explanation |
+| `.gifts-title` | `h1` | Page title on sign-in, admin, kid, and edit |
+| `.gifts-one__title` | `h1` | Adult single-list heading. Text is `You're `, the name span, then `'s secret santa` |
+| `.gifts-one__name` | `span` | The one kid's name inside `.gifts-one__title` |
+| `.gifts-lede` | `p` | Read-only note on the single-list view and the admin view |
+| `.gifts-lead` | `p` | Short explanation on the kid list |
 | `.gifts-setup` | `p` | Shown when the script URL is empty and the sample is off |
 | `.gifts-demo-start` | `button` | "Look at a sample" |
 | `.gifts-loading` | `p` | Placeholder while a request is open |
@@ -93,13 +95,26 @@ While the countdown is more than a day away it shows days, hours, and minutes. U
 | `.gifts-kids` | `fieldset` of names, in config order |
 | `.gifts-choice` | `label` wrapping a radio |
 | `#gifts-kid-<lowercase name>` | Each name radio. `name="kid"` `value` is the name |
-| `#gifts-edit-code` | The kid's code. Label: "Your code" |
-| `#gifts-adult-form` | Adult form |
-| `#gifts-family-code` | Family code. Label: "Family code" |
+| `#gifts-edit-code` | The kid's edit code. Label: "Your code" |
+| `#gifts-adult-form` | Adult form. One field |
+| `#gifts-adult-code` | Adult code. Label text is exactly `Your code` |
 | `.gifts-enter` | Submit for either sign-in form |
 | `.gifts-field` | Label + input pair |
 
-## Adult list (`data-view="all"`)
+The adult field does not ask which kid. The code itself chooses `one`, `all`, or `mine`.
+
+## Adult single list (`data-view="one"`)
+
+Read only. One kid. The response that filled this view has that kid and that kid's items only.
+
+```html
+<h1 class="gifts-one__title">You're <span class="gifts-one__name">Cruz</span>'s secret santa</h1>
+<p class="gifts-lede">You can look. Only Cruz can change this list.</p>
+```
+
+Then one `section.gifts-kid` with `h2.gifts-kid__name`, `.gifts-kid__count`, `ul.gifts-items`, and `li.gifts-item` as on the admin list. No `.gifts-add` and no `.gifts-item__actions`.
+
+## Admin list (`data-view="all"`)
 
 One `section.gifts-kid` per kid, in the config order, including kids with an empty list.
 
@@ -187,18 +202,18 @@ At most 40 gifts per kid.
 | `scriptUrl` | Apps Script web app URL ending in `/exec`. Empty until Joseph pastes it |
 | `kids` | Names in list order. No codes |
 
-`gifts/app.js` holds the lock instant `2026-12-15T00:00:00-08:00` and the same rules the script enforces. Do not put codes in either file.
+`gifts/app.js` holds the lock instant `2026-12-15T00:00:00-08:00` and the same rules the script enforces. The only codes in that file are the sample words (`cruz-view`, `cruz-edit`, `sample-admin`, and the same pattern for each kid). They work only while `scriptUrl` is empty.
 
 ## Storage in the browser
 
 | Key | Store | Contents |
 | --- | --- | --- |
-| `gifts-session-v1` | `sessionStorage` | `{ demo, role, familyCode, kid, editCode, previewLocked }` |
+| `gifts-session-v1` | `sessionStorage` | `{ demo, role, kid, code, previewLocked }` |
 | `gifts-demo-v1` | `sessionStorage` | Sample gifts only. Used when `scriptUrl` is empty |
 
-The session is dropped when the tab closes. A live session keeps the family code or the kid's code in `sessionStorage` so a refresh can reload the list. The sample does not store a code.
+The session is dropped when the tab closes. A live session keeps the code that was typed so a refresh can reload the same list. `role` is `one`, `admin`, or `kid`.
 
-Hash routes: `#/`, `#/all`, `#/mine`, `#/edit`, `#/edit/<id>`.
+Hash routes: `#/`, `#/one`, `#/all`, `#/mine`, `#/edit`, `#/edit/<id>`.
 
 ## Server
 
@@ -208,29 +223,31 @@ Script Properties (not in the repo):
 
 | Key | Who |
 | --- | --- |
-| `FAMILY_CODE` | Adults, viewing every list |
-| `CODE_<Name>` | That kid. Example key: `CODE_Cruz` |
+| `VIEW_<Name>` | The adult for that kid. Example key: `VIEW_Cruz` |
+| `CODE_<Name>` | That kid's edit code. Example key: `CODE_Cruz` |
+| `ADMIN` | Joseph. Every list, read only. Always created |
 
-`setupCodes()` creates any missing property and rewrites the private **Codes** tab. It does not replace an existing property. `resetCode(name)` replaces one. `resetCode("FAMILY")` replaces the family code. `resetCodePrompt()` asks for the name from the sheet menu.
+`setupCodes()` creates any missing property, including `ADMIN`, and rewrites the private **Codes** tab. It does not replace an existing property. `resetCode("Cruz", "edit")` or `resetCode("Cruz", "view")` replaces one kid code. `resetCode("ADMIN")` replaces the admin code. `resetCodePrompt()` asks for `Cruz edit`, `Cruz view`, or `ADMIN`. A new code never matches another stored code.
 
 Sheet tabs:
 
 | Tab | Columns |
 | --- | --- |
 | Items | `id`, `kid`, `name`, `link`, `note`, `priority`, `updatedAt` |
-| Codes | `name`, `code` — private copy for Joseph. Never returned by the web app |
+| Codes | `kid`, `edit code`, `view code` — private copy for Joseph. The `ADMIN` row keeps its code in the view column. Never returned by the web app |
 
 ### `doGet`
 
-| Query | Auth | Response |
-| --- | --- | --- |
-| `action=lists&code=<family>` | `FAMILY_CODE` | `{ ok, locked, lockAt, kids: [{ name, items: [{ id, name, link, note, priority }] }] }` for every kid, in order |
-| `action=mine&kid=<name>&code=<kid code>` | `CODE_<Name>` | `{ ok, locked, lockAt, kid, items }` for that kid only |
-| anything else | none | `{ ok: false, error }` and no list data |
+`?code=` is the whole request. The code decides the payload.
 
-Wrong codes: `{ ok: false, error: "That family code is not right." }` or `"That name and code do not match."`
+| Code matches | Response |
+| --- | --- |
+| `VIEW_<Name>` | `{ ok, role: "view", locked, lockAt, kid, items }`. `items` are only that kid. No `kids` array and no other names |
+| `CODE_<Name>` | `{ ok, role: "edit", locked, lockAt, kid, items }` for that kid only |
+| `ADMIN` | `{ ok, role: "admin", locked, lockAt, kids: [{ name, items }] }` for every kid, in order |
+| anything else | `{ ok: false, error: "That code is not right." }` and no kid, items, or kids |
 
-List responses never include a code.
+Reads work before and after the lock.
 
 ### `doPost`
 
@@ -240,7 +257,7 @@ List responses never include a code.
 { "action": "add|update|remove", "kid": "Cruz", "code": "……", "item": { "id": "", "name": "", "link": "", "note": "", "priority": "high" } }
 ```
 
-`id` is required for `update` and `remove`. The script checks the kid's Script Property, then the deadline, then writes that kid's row only.
+`id` is required for `update` and `remove`. The script accepts only that kid's edit code (`CODE_<Name>`), then the deadline, then writes that kid's row only. A view code or the admin code cannot save.
 
 Success: `{ ok: true, locked: false, items }`.
 
