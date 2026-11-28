@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gift lists — Cruz</title>
+<meta name="description" content="Family gift lists. Adults can look. Each kid can change their own list until December 14." />
+<meta name="theme-color" content="#d8bf94" />
+<link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+<link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/fraunces-700i.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/lexend-400.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/lexend-600.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body data-view="signin" data-configured="false" data-demo="false">
+<a class="gifts-skip" href="#gifts-main">Skip to content</a>
+<header class="gifts-top">
+  <div class="gifts-top__inner">
+    <div class="gifts-top__bar">
+      <a class="gifts-brand" href="#/">Gift lists</a>
+      <div class="gifts-top__tools">
+        <button type="button" class="gifts-signout" id="gifts-signout" hidden>Sign out</button>
+        <a class="gifts-back" href="../">Cruz</a>
+      </div>
+    </div>
+    <p class="gifts-countdown" id="gifts-countdown"></p>
+    <p class="gifts-locknote" id="gifts-locknote" hidden>Lists locked Dec 14</p>
+  </div>
+</header>
+<div class="gifts-demo" id="gifts-demo" hidden></div>
+<p class="gifts-status" id="gifts-status" role="status" aria-live="polite" aria-atomic="true"></p>
+<main id="gifts-main" class="gifts-main" tabindex="-1"></main>
+<noscript><p class="gifts-noscript">Turn on JavaScript to use the gift lists.</p></noscript>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
